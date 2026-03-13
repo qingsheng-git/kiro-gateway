@@ -86,12 +86,29 @@ from kiro.debug_middleware import DebugLoggerMiddleware
 
 # --- Loguru Configuration ---
 logger.remove()
-logger.add(
-    sys.stderr,
-    level=LOG_LEVEL,
-    colorize=True,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
-)
+
+# In frozen (packaged) mode without console, sys.stderr is None
+# Use file logging instead to avoid "Cannot log to objects of type 'NoneType'" error
+is_frozen = getattr(sys, 'frozen', False)
+if is_frozen and sys.stderr is None:
+    # Packaged executable without console - log to file
+    log_dir = Path.home() / ".kiro-gateway"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        log_dir / "main.log",
+        level=LOG_LEVEL,
+        rotation="10 MB",
+        retention="7 days",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
+    )
+else:
+    # Normal mode - log to stderr
+    logger.add(
+        sys.stderr,
+        level=LOG_LEVEL,
+        colorize=True,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+    )
 
 
 class InterceptHandler(logging.Handler):
@@ -469,20 +486,38 @@ app.include_router(anthropic_router)
 # --- Uvicorn log config ---
 # Minimal configuration for redirecting uvicorn logs to loguru.
 # Uses InterceptHandler which intercepts logs and passes them to loguru.
-UVICORN_LOG_CONFIG = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {
-        "default": {
-            "class": "main.InterceptHandler",
-        },
-    },
-    "loggers": {
-        "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
-        "uvicorn.error": {"handlers": ["default"], "level": "INFO", "propagate": False},
-        "uvicorn.access": {"handlers": ["default"], "level": "INFO", "propagate": False},
-    },
-}
+# 
+# Note: In frozen (packaged) mode, we can't use string-based class references
+# because the module structure changes. Instead, we'll configure logging
+# programmatically in run_console_mode().
+def get_uvicorn_log_config():
+    """
+    Get uvicorn logging configuration.
+    
+    Returns dict-based config for normal mode, or None for frozen mode
+    (where we'll configure logging programmatically).
+    """
+    is_frozen = getattr(sys, 'frozen', False)
+    
+    if is_frozen:
+        # In frozen mode, return None - we'll configure logging programmatically
+        return None
+    else:
+        # In normal mode, use dict-based config with string class reference
+        return {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "handlers": {
+                "default": {
+                    "class": "main.InterceptHandler",
+                },
+            },
+            "loggers": {
+                "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
+                "uvicorn.error": {"handlers": ["default"], "level": "INFO", "propagate": False},
+                "uvicorn.access": {"handlers": ["default"], "level": "INFO", "propagate": False},
+            },
+        }
 
 
 def parse_cli_args() -> argparse.Namespace:
@@ -509,6 +544,7 @@ Examples:
   python main.py --port 9000              # Override port only
   python main.py --host 127.0.0.1         # Local connections only
   python main.py -H 0.0.0.0 -p 8080       # Short form
+  python main.py --tray                   # Run in system tray mode (Windows only)
   
   SERVER_PORT=9000 python main.py         # Via environment
   uvicorn main:app --port 9000            # Via uvicorn directly
@@ -529,6 +565,18 @@ Examples:
         default=None,  # None means "use env or default"
         metavar="PORT",
         help=f"Server port (default: {DEFAULT_SERVER_PORT}, env: SERVER_PORT)"
+    )
+    
+    parser.add_argument(
+        "--tray",
+        action="store_true",
+        help="Run in system tray mode (Windows only, hides console window)"
+    )
+    
+    parser.add_argument(
+        "--no-tray",
+        action="store_true",
+        help="Explicitly disable tray mode (run in console mode)"
     )
     
     parser.add_argument(
@@ -605,26 +653,211 @@ def print_startup_banner(host: str, port: int) -> None:
     display_host = "localhost" if host == "0.0.0.0" else host
     url = f"http://{display_host}:{port}"
     
+    # Try to use UTF-8 encoding for Unicode characters
+    # Fall back to ASCII if the console doesn't support UTF-8 (e.g., Windows GBK)
+    try:
+        # Test if console supports Unicode characters
+        test_chars = "👻➜─💬"
+        test_chars.encode(sys.stdout.encoding or 'utf-8')
+        # If successful, use Unicode characters
+        ghost_icon = "👻"
+        arrow = "➜"
+        line = "─"
+        chat_icon = "💬"
+    except (UnicodeEncodeError, AttributeError, LookupError):
+        # Console doesn't support Unicode, use ASCII alternatives
+        ghost_icon = ">"
+        arrow = ">"
+        line = "-"
+        chat_icon = "?"
+    
     print()
-    print(f"  {WHITE}{BOLD}👻 {APP_TITLE} v{APP_VERSION}{RESET}")
+    print(f"  {WHITE}{BOLD}{ghost_icon} {APP_TITLE} v{APP_VERSION}{RESET}")
     print()
     print(f"  {WHITE}Server running at:{RESET}")
-    print(f"  {GREEN}{BOLD}➜  {url}{RESET}")
+    print(f"  {GREEN}{BOLD}{arrow}  {url}{RESET}")
     print()
     print(f"  {DIM}API Docs:      {url}/docs{RESET}")
     print(f"  {DIM}Health Check:  {url}/health{RESET}")
     print()
-    print(f"  {DIM}{'─' * 48}{RESET}")
-    print(f"  {WHITE}💬 Found a bug? Need help? Have questions?{RESET}")
-    print(f"  {YELLOW}➜  https://github.com/jwadow/kiro-gateway/issues{RESET}")
-    print(f"  {DIM}{'─' * 48}{RESET}")
+    print(f"  {DIM}{line * 48}{RESET}")
+    print(f"  {WHITE}{chat_icon} Found a bug? Need help? Have questions?{RESET}")
+    print(f"  {YELLOW}{arrow}  https://github.com/jwadow/kiro-gateway/issues{RESET}")
+    print(f"  {DIM}{line * 48}{RESET}")
     print()
+
+
+def setup_tray_logging() -> Path:
+    """
+    Configure logging for tray mode (redirect to file).
+    
+    Redirects all logs to file instead of console, with log rotation
+    and retention policies.
+    
+    Returns:
+        Path to the log directory
+    """
+    # Create log directory
+    log_dir = Path.home() / ".kiro-gateway"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Log file path
+    log_file = log_dir / "tray.log"
+    
+    # Remove default stderr handler
+    logger.remove()
+    
+    # Add file handler with rotation
+    logger.add(
+        log_file,
+        rotation="10 MB",
+        retention="7 days",
+        level="DEBUG",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
+    )
+    
+    logger.info("Tray mode logging configured")
+    logger.info(f"Log file: {log_file}")
+    
+    return log_dir
+
+
+def run_console_mode(host: str, port: int) -> None:
+    """
+    Run the application in console mode (existing behavior).
+    
+    In frozen (packaged) mode, passes the app object directly and configures
+    logging programmatically since string-based class references don't work
+    when the module structure changes in PyInstaller bundles.
+    
+    Args:
+        host: Server host address
+        port: Server port
+    """
+    import uvicorn
+    
+    # Print startup banner
+    print_startup_banner(host, port)
+    
+    logger.info(f"Starting Uvicorn server on {host}:{port}...")
+    
+    is_frozen = getattr(sys, 'frozen', False)
+    log_config = get_uvicorn_log_config()
+    
+    if is_frozen:
+        # Frozen mode: pass app object directly and configure logging programmatically
+        # String reference "main:app" doesn't work in PyInstaller bundles
+        # log_config=None tells uvicorn to skip dict-based logging config
+        # setup_logging_intercept() already configured the handlers above
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            log_config=log_config,
+        )
+    else:
+        # Normal mode: use string reference for auto-reload support
+        uvicorn.run(
+            "main:app",
+            host=host,
+            port=port,
+            log_config=log_config,
+        )
+
+
+def run_tray_mode(host: str, port: int) -> None:
+    """
+    Run the application in tray mode (Windows system tray).
+    
+    Configures logging for tray mode, loads settings, creates all required
+    managers, and starts the tray application.
+    
+    Args:
+        host: Server host address
+        port: Server port
+    """
+    from kiro.platform_utils import is_windows
+    from kiro.service_manager import ServiceManager
+    from kiro.settings_manager import SettingsManager
+    from kiro.icon_manager import IconManager
+    from kiro.notification_manager import NotificationManager
+    from kiro.health_monitor import HealthMonitor
+    from kiro.tray_app import TrayApplication
+    
+    # Configure logging for tray mode
+    log_dir = setup_tray_logging()
+    
+    logger.info("Starting Kiro Gateway in tray mode")
+    logger.info(f"Version: {APP_VERSION}")
+    logger.info(f"Server configuration: {host}:{port}")
+    
+    try:
+        # Load settings
+        settings_file = Path.home() / ".kiro-gateway" / "tray_settings.json"
+        settings_manager = SettingsManager(settings_file)
+        settings = settings_manager.load()
+        
+        # Use settings for host/port if not overridden by CLI
+        # (CLI args have already been resolved by resolve_server_config)
+        logger.info(f"Settings loaded from: {settings_file}")
+        
+        # Create service log file path
+        service_log_file = log_dir / "service.log"
+        
+        # Create ServiceManager
+        service_manager = ServiceManager(
+            host=host,
+            port=port,
+            log_file=service_log_file
+        )
+        logger.info("ServiceManager created")
+        
+        # Create IconManager
+        assets_dir = Path(__file__).parent / "assets"
+        icon_manager = IconManager(assets_dir)
+        logger.info("IconManager created")
+        
+        # Create HealthMonitor
+        health_monitor = HealthMonitor(
+            host=host,
+            port=port,
+            check_interval=30.0
+        )
+        logger.info("HealthMonitor created")
+        
+        # Create NotificationManager (icon will be set by TrayApplication)
+        notification_manager = NotificationManager(
+            icon=None,  # Will be set by TrayApplication
+            rate_limit=60.0
+        )
+        logger.info("NotificationManager created")
+        
+        # Create TrayApplication
+        tray_app = TrayApplication(
+            service_manager=service_manager,
+            settings_manager=settings_manager,
+            icon_manager=icon_manager,
+            notification_manager=notification_manager,
+            health_monitor=health_monitor
+        )
+        logger.info("TrayApplication created")
+        
+        # Run tray application (blocking)
+        logger.info("Starting tray application event loop")
+        tray_app.run()
+        
+    except KeyboardInterrupt:
+        logger.info("Received interrupt signal")
+    except Exception as e:
+        logger.error(f"Error in tray mode: {e}", exc_info=True)
+        raise
+    finally:
+        # Cleanup
+        logger.info("Tray mode shutdown complete")
 
 
 # --- Entry Point ---
 if __name__ == "__main__":
-    import uvicorn
-    
     # Run configuration validation before starting server
     validate_configuration()
     
@@ -637,15 +870,27 @@ if __name__ == "__main__":
     # Resolve final configuration with priority hierarchy
     final_host, final_port = resolve_server_config(args)
     
-    # Print startup banner
-    print_startup_banner(final_host, final_port)
+    # Detect if running as packaged executable
+    is_frozen = getattr(sys, 'frozen', False)
     
-    logger.info(f"Starting Uvicorn server on {final_host}:{final_port}...")
+    # For packaged executable, default to tray mode unless explicitly disabled
+    if is_frozen and not args.no_tray and not args.tray:
+        args.tray = True
+        logger.info("Running as packaged executable - defaulting to tray mode")
     
-    # Use string reference to avoid double module import
-    uvicorn.run(
-        "main:app",
-        host=final_host,
-        port=final_port,
-        log_config=UVICORN_LOG_CONFIG,
-    )
+    # Check if tray mode is requested and supported
+    if args.tray and not args.no_tray:
+        from kiro.platform_utils import is_windows
+        
+        if not is_windows():
+            # Non-Windows platform - log warning and start console mode
+            logger.warning("Tray mode is only supported on Windows. Starting in console mode.")
+            run_console_mode(final_host, final_port)
+        else:
+            # Windows platform - start tray mode
+            logger.info("Starting in tray mode")
+            run_tray_mode(final_host, final_port)
+    else:
+        # Console mode (default behavior)
+        run_console_mode(final_host, final_port)
+

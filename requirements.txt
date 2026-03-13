@@ -5,6 +5,8 @@ httpx
 loguru
 python-dotenv
 tiktoken
+pystray>=0.19.5
+Pillow>=10.0.0
 
 # Testing dependencies
 pytest

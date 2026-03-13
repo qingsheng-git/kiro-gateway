@@ -97,9 +97,149 @@ python main.py
 
 # Or with custom port (if 8000 is busy)
 python main.py --port 9000
+
+# Windows: Run in system tray mode (background, no console window)
+python main.py --tray
 ```
 
 The server will be available at `http://localhost:8000`
+
+### 🪟 Windows System Tray Mode
+
+**Run Kiro Gateway in the background without a console window.**
+
+```bash
+# Start in tray mode
+python main.py --tray
+
+# Explicitly use console mode (default)
+python main.py --no-tray
+```
+
+**Features:**
+- 🎯 System tray icon with right-click menu
+- 🚀 Start/Stop/Restart service from tray
+- 🔄 Auto-start with Windows (optional)
+- 📊 Service health monitoring
+- 📁 Quick access to logs
+- 🔔 Error notifications
+
+**Tray Menu Options:**
+- **Start Service** - Launch the gateway server
+- **Stop Service** - Gracefully stop the server
+- **Restart Service** - Restart the server
+- **Start with Windows** - Enable/disable auto-start
+- **Open Logs** - View log files in Explorer
+- **Exit** - Stop service and close application
+
+**Log Files:**
+- Tray application: `%USERPROFILE%\.kiro-gateway\tray.log`
+- Gateway service: `%USERPROFILE%\.kiro-gateway\service.log`
+- Settings: `%USERPROFILE%\.kiro-gateway\tray_settings.json`
+
+**Troubleshooting:**
+- If the tray icon doesn't appear, check `tray.log` for errors
+- If service fails to start, check `service.log` for details
+- Ensure port 8000 (or your configured port) is not in use
+- Verify credentials are correctly configured in `.env`
+- On non-Windows systems, `--tray` flag is ignored (console mode used)
+
+📖 **For detailed documentation, see [TRAY_MODE.md](TRAY_MODE.md)**
+
+---
+
+## 📦 Windows Executable (Standalone .exe)
+
+**Package Kiro Gateway as a standalone Windows executable - no Python installation required!**
+
+### Quick Build
+
+```bash
+# Install PyInstaller
+pip install pyinstaller
+
+# Run build script
+build.bat
+
+# Get your executable
+dist\KiroGateway.exe
+```
+
+### Features
+
+✅ **No Python Required** - Runs on any Windows 10/11 system  
+✅ **Single File** - All dependencies included (~50-80 MB)  
+✅ **Auto Tray Mode** - Starts in system tray by default  
+✅ **No Console Window** - Clean background operation  
+✅ **Command Line Support** - All CLI arguments work  
+✅ **Easy Distribution** - Just share the .exe file  
+
+### Using the Executable
+
+**Direct Run (Recommended):**
+```bash
+# Double-click KiroGateway.exe
+# - Automatically starts in tray mode
+# - No console window
+# - Icon appears in system tray
+```
+
+**Command Line:**
+```bash
+# Custom port
+KiroGateway.exe --port 9000
+
+# Force console mode
+KiroGateway.exe --no-tray
+
+# Show help
+KiroGateway.exe --help
+```
+
+### Configuration
+
+The executable supports all configuration methods:
+
+**1. Environment Variables (Recommended):**
+```
+PROXY_API_KEY=your-secret-key
+REFRESH_TOKEN=your-refresh-token
+```
+
+**2. Credentials File:**
+```
+%USERPROFILE%\.aws\sso\cache\kiro-auth-token.json
+```
+
+**3. .env File:**
+Place `.env` file next to `KiroGateway.exe`
+
+### Distribution
+
+**Minimal Distribution:**
+```
+KiroGateway.exe  (that's it!)
+```
+
+**Complete Package:**
+```
+KiroGateway/
+├── KiroGateway.exe
+├── .env.example
+└── README.md
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Double-click does nothing | Check system tray (bottom-right corner) |
+| Antivirus warning | False positive - add to whitelist |
+| Can't find config | Set environment variables or create .env file |
+| Need to see errors | Check logs: `%USERPROFILE%\.kiro-gateway\` |
+| Want console output | Run with `--no-tray` flag |
+
+📖 **For detailed build instructions, see [BUILD_GUIDE.md](BUILD_GUIDE.md)**
 
 ---
 

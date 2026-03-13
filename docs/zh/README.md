@@ -97,9 +97,149 @@ python main.py
 
 # 或使用自定义端口（如果 8000 被占用）
 python main.py --port 9000
+
+# Windows: 以系统托盘模式运行（后台运行，无控制台窗口）
+python main.py --tray
 ```
 
 服务器将在 `http://localhost:8000` 上可用
+
+### 🪟 Windows 系统托盘模式
+
+**在后台运行 Kiro Gateway，无控制台窗口。**
+
+```bash
+# 以托盘模式启动
+python main.py --tray
+
+# 显式使用控制台模式（默认）
+python main.py --no-tray
+```
+
+**功能特性：**
+- 🎯 系统托盘图标，带右键菜单
+- 🚀 从托盘启动/停止/重启服务
+- 🔄 开机自启动（可选）
+- 📊 服务健康监控
+- 📁 快速访问日志
+- 🔔 错误通知
+
+**托盘菜单选项：**
+- **Start Service** - 启动网关服务器
+- **Stop Service** - 优雅停止服务器
+- **Restart Service** - 重启服务器
+- **Start with Windows** - 启用/禁用开机自启动
+- **Open Logs** - 在资源管理器中查看日志文件
+- **Exit** - 停止服务并关闭应用程序
+
+**日志文件：**
+- 托盘应用程序：`%USERPROFILE%\.kiro-gateway\tray.log`
+- 网关服务：`%USERPROFILE%\.kiro-gateway\service.log`
+- 设置：`%USERPROFILE%\.kiro-gateway\tray_settings.json`
+
+**故障排除：**
+- 如果托盘图标未出现，检查 `tray.log` 查看错误
+- 如果服务启动失败，检查 `service.log` 查看详情
+- 确保端口 8000（或您配置的端口）未被占用
+- 验证凭据在 `.env` 中正确配置
+- 在非 Windows 系统上，`--tray` 标志被忽略（使用控制台模式）
+
+📖 **详细文档请参见 [TRAY_MODE.md](../../TRAY_MODE.md)**
+
+---
+
+## 📦 Windows 可执行文件（独立 .exe）
+
+**将 Kiro Gateway 打包为独立的 Windows 可执行文件 - 无需安装 Python！**
+
+### 快速构建
+
+```bash
+# 安装 PyInstaller
+pip install pyinstaller
+
+# 运行构建脚本
+build.bat
+
+# 获取可执行文件
+dist\KiroGateway.exe
+```
+
+### 功能特性
+
+✅ **无需 Python** - 可在任何 Windows 10/11 系统上运行  
+✅ **单文件** - 包含所有依赖（约 50-80 MB）  
+✅ **自动托盘模式** - 默认以系统托盘模式启动  
+✅ **无控制台窗口** - 干净的后台运行  
+✅ **命令行支持** - 所有 CLI 参数都可用  
+✅ **易于分发** - 只需分享 .exe 文件  
+
+### 使用可执行文件
+
+**直接运行（推荐）：**
+```bash
+# 双击 KiroGateway.exe
+# - 自动以托盘模式启动
+# - 无控制台窗口
+# - 图标出现在系统托盘
+```
+
+**命令行：**
+```bash
+# 自定义端口
+KiroGateway.exe --port 9000
+
+# 强制控制台模式
+KiroGateway.exe --no-tray
+
+# 显示帮助
+KiroGateway.exe --help
+```
+
+### 配置
+
+可执行文件支持所有配置方法：
+
+**1. 环境变量（推荐）：**
+```
+PROXY_API_KEY=your-secret-key
+REFRESH_TOKEN=your-refresh-token
+```
+
+**2. 凭据文件：**
+```
+%USERPROFILE%\.aws\sso\cache\kiro-auth-token.json
+```
+
+**3. .env 文件：**
+将 `.env` 文件放在 `KiroGateway.exe` 旁边
+
+### 分发
+
+**最小分发：**
+```
+KiroGateway.exe  （就这个！）
+```
+
+**完整包：**
+```
+KiroGateway/
+├── KiroGateway.exe
+├── .env.example
+└── README.md
+```
+
+### 故障排除
+
+| 问题 | 解决方案 |
+|------|---------|
+| 双击无反应 | 检查系统托盘（右下角） |
+| 杀毒软件警告 | 误报 - 添加到白名单 |
+| 找不到配置 | 设置环境变量或创建 .env 文件 |
+| 需要查看错误 | 检查日志：`%USERPROFILE%\.kiro-gateway\` |
+| 需要控制台输出 | 使用 `--no-tray` 标志运行 |
+
+📖 **详细构建说明请参见 [BUILD_GUIDE.md](../../BUILD_GUIDE.md)**
 
 ---
 
@@ -316,6 +456,15 @@ docker run -d `
   -e PROXY_API_KEY="my-super-secret-password-123" `
   --name kiro-gateway `
   ghcr.io/jwadow/kiro-gateway:latest
+```
+
+</details>
+
+<details>
+<summary>🔹 使用 .env 文件</summary>
+
+```bash
+docker run -d -p 8000:8000 --env-file .env --name kiro-gateway ghcr.io/jwadow/kiro-gateway:latest
 ```
 
 </details>
