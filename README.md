@@ -26,13 +26,13 @@ This is a fork of [Jwadow/kiro-gateway](https://github.com/Jwadow/kiro-gateway) 
 
 | Change | Description |
 |--------|-------------|
-| 🌐 **Web Admin Panel** | Browser-based management interface at `/admin` — view available models, manage model aliases (create/delete), manage multiple credential profiles (add/remove/enable/disable/validate), query quota usage, all with API key authentication |
+| 🚀 **Zero-Config Startup** | No `.env` file required to start — the server launches in setup mode and guides you to configure credentials via the web admin panel |
+| 🔧 **Web API Key Configuration** | Set and update `PROXY_API_KEY` directly from the `/admin` panel — persisted server-side, takes effect immediately for all clients |
+| 🌐 **Web Admin Panel** | Browser-based management interface at `/admin` — view available models, manage model aliases (create/delete), manage multiple credential profiles (add/remove/enable/disable/validate), query quota usage |
 | 🔑 **Multi-Credential Management** | Support multiple credential profiles with round-robin rotation, per-profile enable/disable, validation, and quota querying via `CredentialManager` |
 | 🪟 **Windows System Tray Mode** | Run the gateway as a background service with system tray icon, right-click menu for start/stop/restart, auto-start with Windows, health monitoring, and error notifications |
 | 📦 **Windows Executable Packaging** | Package as a standalone `.exe` via PyInstaller — no Python installation required. Single-file distribution (~50-80 MB), auto tray mode on double-click |
 | 🧩 **New Models** | Added DeepSeek-V3.2, MiniMax M2.1, Qwen3-Coder-Next to the supported model list |
-| 🖥️ **Console Encoding Fix** | Graceful fallback for non-UTF-8 consoles (e.g., Windows GBK) in startup banner |
-| 📝 **Frozen Mode Support** | Proper logging and uvicorn configuration when running as a PyInstaller bundle |
 
 > Upstream features (v2.3 and earlier) are fully included. See the [original repo](https://github.com/Jwadow/kiro-gateway) for upstream changelog.
 

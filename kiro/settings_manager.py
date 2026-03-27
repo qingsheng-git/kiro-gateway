@@ -22,6 +22,7 @@ class TraySettings:
     server_port: int = 8000
     last_state: str = "stopped"
     model_aliases: Dict[str, str] = field(default_factory=dict)
+    proxy_api_key: str = ""
     
     def to_dict(self) -> dict:
         """
@@ -37,8 +38,8 @@ class TraySettings:
         """
         Create from dictionary (JSON deserialization).
         
-        Backward-compatible: if model_aliases is missing from the data
-        (old format), defaults to an empty dictionary.
+        Backward-compatible: if model_aliases or proxy_api_key is missing
+        from the data (old format), defaults to empty values.
         
         Args:
             data: Dictionary containing settings data
@@ -49,6 +50,8 @@ class TraySettings:
         # Ensure model_aliases exists for backward compatibility with old format
         if 'model_aliases' not in data:
             data = {**data, 'model_aliases': {}}
+        if 'proxy_api_key' not in data:
+            data = {**data, 'proxy_api_key': ''}
         return cls(**data)
 
 

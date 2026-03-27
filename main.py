@@ -415,6 +415,12 @@ async def lifespan(app: FastAPI):
     settings_manager = SettingsManager(settings_file)
     saved_settings = settings_manager.load()
     
+    # Restore persisted PROXY_API_KEY if set via admin panel
+    if saved_settings.proxy_api_key:
+        from kiro.config import set_runtime_proxy_api_key
+        set_runtime_proxy_api_key(saved_settings.proxy_api_key)
+        logger.info("PROXY_API_KEY restored from settings file")
+    
     # Use saved aliases if non-empty, otherwise fall back to config.py defaults
     effective_aliases = saved_settings.model_aliases if saved_settings.model_aliases else MODEL_ALIASES
     

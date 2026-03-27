@@ -98,6 +98,49 @@ SERVER_PORT: int = int(os.getenv("SERVER_PORT", str(DEFAULT_SERVER_PORT)))
 # API key for proxy access (clients must pass it in Authorization header)
 PROXY_API_KEY: str = os.getenv("PROXY_API_KEY", "my-super-secret-password-123")
 
+# Default API key that ships with the code — used to detect "unconfigured" state
+_DEFAULT_API_KEY: str = "my-super-secret-password-123"
+
+# Runtime override for PROXY_API_KEY (set via admin panel, persisted in settings)
+_runtime_proxy_api_key: str = ""
+
+
+def get_proxy_api_key() -> str:
+    """
+    Return the effective PROXY_API_KEY.
+    
+    Priority:
+    1. Runtime override (set via admin panel)
+    2. Environment / .env value
+    
+    Returns:
+        The active API key string.
+    """
+    if _runtime_proxy_api_key:
+        return _runtime_proxy_api_key
+    return PROXY_API_KEY
+
+
+def set_runtime_proxy_api_key(key: str) -> None:
+    """
+    Set the runtime PROXY_API_KEY override.
+    
+    Args:
+        key: New API key value. Empty string clears the override.
+    """
+    global _runtime_proxy_api_key
+    _runtime_proxy_api_key = key
+
+
+def is_api_key_configured() -> bool:
+    """
+    Check whether a real (non-default) API key is configured.
+    
+    Returns:
+        True if the effective key differs from the built-in default.
+    """
+    return get_proxy_api_key() != _DEFAULT_API_KEY
+
 # ==================================================================================================
 # VPN/Proxy Settings for Kiro API Access
 # ==================================================================================================

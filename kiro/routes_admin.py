@@ -42,10 +42,20 @@ from loguru import logger
 from pydantic import BaseModel
 
 from kiro.admin_html import get_admin_html
-from kiro.config import APP_VERSION, HIDDEN_FROM_LIST, HIDDEN_MODELS, PROXY_API_KEY
+from kiro.config import APP_VERSION, HIDDEN_FROM_LIST, HIDDEN_MODELS, PROXY_API_KEY, get_proxy_api_key, set_runtime_proxy_api_key, is_api_key_configured
 
 
 # --- Pydantic Models ---
+
+
+class ApiKeySetRequest(BaseModel):
+    """Request body for setting the PROXY_API_KEY via admin panel.
+
+    Attributes:
+        api_key: The new API key to use for all proxy authentication.
+    """
+
+    api_key: str
 
 
 class AliasCreateRequest(BaseModel):
@@ -144,14 +154,16 @@ async def verify_admin_api_key(request: Request) -> bool:
     Raises:
         HTTPException: 401 if the key is invalid or missing.
     """
+    effective_key = get_proxy_api_key()
+    
     # Try Authorization: Bearer header first
     auth_header = request.headers.get("authorization")
-    if auth_header and auth_header == f"Bearer {PROXY_API_KEY}":
+    if auth_header and auth_header == f"Bearer {effective_key}":
         return True
 
     # Fall back to X-API-Key header
     x_api_key = request.headers.get("x-api-key")
-    if x_api_key and x_api_key == PROXY_API_KEY:
+    if x_api_key and x_api_key == effective_key:
         return True
 
     logger.warning("Admin panel access attempt with invalid API key")
@@ -175,6 +187,83 @@ async def get_admin_page() -> HTMLResponse:
         HTMLResponse with a placeholder admin page.
     """
     return HTMLResponse(content=get_admin_html(APP_VERSION))
+
+
+# =============================================================================
+# API Key Management Endpoints
+# =============================================================================
+
+
+@admin_router.get("/api/settings/apikey/status", response_model=ApiResponse)
+async def get_apikey_status() -> ApiResponse:
+    """Check whether a real API key is configured.
+
+    This endpoint does NOT require authentication so the admin UI can
+    determine whether to show the "first-time setup" flow.
+
+    Returns:
+        ApiResponse with ``data`` containing ``{configured: bool}``.
+    """
+    return ApiResponse(
+        success=True,
+        message="ok",
+        data={"configured": is_api_key_configured()},
+    )
+
+
+@admin_router.post("/api/settings/apikey", response_model=ApiResponse)
+async def set_apikey(
+    request: Request,
+    body: ApiKeySetRequest,
+) -> ApiResponse:
+    """Set or update the PROXY_API_KEY.
+
+    Authentication rules:
+    - If no real key is configured yet (first-time setup), no auth required.
+    - If a key is already configured, the caller must provide the current
+      key via Authorization header to authorize the change.
+
+    The new key is persisted to ``~/.kiro-gateway/tray_settings.json`` and
+    takes effect immediately for all subsequent requests.
+
+    Args:
+        request: The incoming FastAPI request.
+        body: ``ApiKeySetRequest`` with the new ``api_key``.
+
+    Returns:
+        ApiResponse confirming the key was set.
+
+    Raises:
+        HTTPException: 400 if the new key is empty/whitespace.
+        HTTPException: 401 if a key is already set and the caller fails auth.
+    """
+    new_key = body.api_key.strip()
+    if not new_key:
+        raise HTTPException(status_code=400, detail="API Key 不能为空")
+
+    # If a real key is already configured, require current key for authorization
+    if is_api_key_configured():
+        try:
+            await verify_admin_api_key(request)
+        except HTTPException:
+            raise HTTPException(
+                status_code=401,
+                detail="修改 API Key 需要提供当前有效的 API Key",
+            )
+
+    # Apply runtime override
+    set_runtime_proxy_api_key(new_key)
+
+    # Persist to settings file
+    settings_manager = getattr(request.app.state, "settings_manager", None)
+    if settings_manager:
+        settings = settings_manager.load()
+        settings.proxy_api_key = new_key
+        settings_manager.save(settings)
+
+    logger.info("PROXY_API_KEY updated via admin panel")
+    return ApiResponse(success=True, message="API Key 已设置并生效")
+
 
 @admin_router.get("/api/models", response_model=ApiResponse)
 async def get_available_models(
