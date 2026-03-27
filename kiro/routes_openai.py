@@ -174,6 +174,13 @@ async def get_usage_limits(request: Request):
         # Get auth manager from app state
         auth_manager: KiroAuthManager = request.app.state.auth_manager
         
+        # Guard: no usable credentials configured
+        if not auth_manager._refresh_token and not auth_manager._creds_file and not auth_manager._sqlite_db:
+            raise HTTPException(
+                status_code=503,
+                detail="No Kiro credentials configured. Please open /admin to add credentials."
+            )
+        
         # Get access token
         access_token = await auth_manager.get_access_token()
         
@@ -254,6 +261,13 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
     pool_auth = credential_manager.get_next_auth_manager() if credential_manager else None
     auth_manager: KiroAuthManager = pool_auth or request.app.state.auth_manager
     model_cache: ModelInfoCache = request.app.state.model_cache
+    
+    # Guard: no usable credentials configured
+    if not pool_auth and not auth_manager._refresh_token and not auth_manager._creds_file and not auth_manager._sqlite_db:
+        raise HTTPException(
+            status_code=503,
+            detail="No Kiro credentials configured. Please open /admin to add credentials."
+        )
     
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
     # This ensures debug logging works even for requests that fail Pydantic validation (422 errors)
