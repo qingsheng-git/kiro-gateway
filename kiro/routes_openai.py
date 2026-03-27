@@ -42,6 +42,7 @@ from kiro.models_openai import (
     OpenAIModel,
     ModelList,
     ChatCompletionRequest,
+    UsageLimitsResponse,
 )
 from kiro.auth import KiroAuthManager, AuthType
 from kiro.cache import ModelInfoCache
@@ -150,6 +151,83 @@ async def get_models(request: Request):
     return ModelList(data=openai_models)
 
 
+@router.get("/v1/usage", response_model=UsageLimitsResponse, dependencies=[Depends(verify_api_key)])
+async def get_usage_limits(request: Request):
+    """
+    Get usage limits and current usage information.
+    
+    Queries the Kiro API for the user's usage limits, current usage,
+    and subscription information.
+    
+    Args:
+        request: FastAPI Request for accessing app.state
+    
+    Returns:
+        UsageLimitsResponse with usage information
+    
+    Raises:
+        HTTPException: If unable to fetch usage limits from Kiro API
+    """
+    logger.info("Request to /v1/usage")
+    
+    try:
+        # Get auth manager from app state
+        auth_manager: KiroAuthManager = request.app.state.auth_manager
+        
+        # Get access token
+        access_token = await auth_manager.get_access_token()
+        
+        # Get profile ARN and region
+        profile_arn = auth_manager.profile_arn
+        region = auth_manager.region
+        
+        if not profile_arn:
+            logger.error("Profile ARN not available for usage limits query")
+            raise HTTPException(
+                status_code=400,
+                detail="Profile ARN not configured. Cannot query usage limits."
+            )
+        
+        # Build URL for getUsageLimits endpoint
+        api_host = auth_manager.api_host
+        url = (
+            f"https://{api_host}/getUsageLimits"
+            f"?isEmailRequired=true"
+            f"&origin=AI_EDITOR"
+            f"&profileArn={profile_arn}"
+            f"&resourceType=AGENTIC_REQUEST"
+        )
+        
+        logger.debug(f"Fetching usage limits from: {url}")
+        
+        # Make request to Kiro API
+        async with KiroHttpClient(auth_manager) as client:
+            response = await client.request_with_retry(
+                method="GET",
+                url=url,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "x-amz-user-agent": "aws-sdk-js/1.0.0 KiroIDE",
+                }
+            )
+        
+        # Parse response
+        usage_data = response.json()
+        logger.debug(f"Usage limits response: {usage_data}")
+        
+        # Return as UsageLimitsResponse
+        return UsageLimitsResponse(**usage_data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch usage limits: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch usage limits: {str(e)}"
+        )
+
+
 @router.post("/v1/chat/completions", dependencies=[Depends(verify_api_key)])
 async def chat_completions(request: Request, request_data: ChatCompletionRequest):
     """
@@ -171,7 +249,10 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
     """
     logger.info(f"Request to /v1/chat/completions (model={request_data.model}, stream={request_data.stream})")
     
-    auth_manager: KiroAuthManager = request.app.state.auth_manager
+    # Multi-user auth: try credential manager first, fall back to default auth
+    credential_manager = getattr(request.app.state, "credential_manager", None)
+    pool_auth = credential_manager.get_next_auth_manager() if credential_manager else None
+    auth_manager: KiroAuthManager = pool_auth or request.app.state.auth_manager
     model_cache: ModelInfoCache = request.app.state.model_cache
     
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
@@ -239,6 +320,13 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
     if auth_manager.auth_type == AuthType.KIRO_DESKTOP and auth_manager.profile_arn:
         profile_arn_for_payload = auth_manager.profile_arn
     
+    # Resolve model alias before building payload
+    model_resolver: ModelResolver = request.app.state.model_resolver
+    resolution = model_resolver.resolve(request_data.model)
+    if resolution.original_request != resolution.internal_id:
+        logger.info(f"Model resolved: '{request_data.model}' → '{resolution.internal_id}'")
+        request_data.model = resolution.internal_id
+
     try:
         kiro_payload = build_kiro_payload(
             request_data,
@@ -369,6 +457,9 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                         logger.info(f"HTTP 200 - POST /v1/chat/completions (streaming) - client disconnected")
                     else:
                         logger.info(f"HTTP 200 - POST /v1/chat/completions (streaming) - completed")
+                    # Record usage for multi-user tracking
+                    if not streaming_error and credential_manager:
+                        credential_manager.record_usage(auth_manager)
                     # Write debug logs AFTER streaming completes
                     if debug_logger:
                         if streaming_error:
@@ -395,6 +486,10 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             
             # Log access log for non-streaming success
             logger.info(f"HTTP 200 - POST /v1/chat/completions (non-streaming) - completed")
+            
+            # Record usage for multi-user tracking
+            if credential_manager:
+                credential_manager.record_usage(auth_manager)
             
             # Write debug logs after non-streaming request completes
             if debug_logger:

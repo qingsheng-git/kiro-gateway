@@ -269,6 +269,22 @@ class ModelResolver:
         self.hidden_models = hidden_models or {}
         self.aliases = aliases or {}
         self.hidden_from_list = set(hidden_from_list or [])
+
+    def update_aliases(self, aliases: Dict[str, str]) -> None:
+        """
+        Update alias mappings at runtime, taking effect immediately.
+
+        Replaces the current alias dictionary entirely with the provided one.
+        Existing requests in flight are not affected; subsequent resolve() calls
+        will use the new mappings.
+
+        Args:
+            aliases: New alias mapping dict. Keys are alias names, values are
+                     real model IDs. Example: {"my-opus": "claude-opus-4.5"}
+        """
+        self.aliases = aliases
+        logger.info(f"Model aliases updated: {len(aliases)} alias(es) active")
+
     
     def resolve(self, external_model: str) -> ModelResolution:
         """

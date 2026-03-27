@@ -9,6 +9,7 @@ management, health monitoring, and notifications.
 from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 from pathlib import Path
+import webbrowser
 from loguru import logger
 
 try:
@@ -102,6 +103,7 @@ class TrayApplication:
         - Stop Service
         - Separator
         - Start with Windows (checkbox)
+        - Admin Panel (enabled only when running)
         - Open Logs
         - Separator
         - Exit
@@ -147,6 +149,13 @@ class TrayApplication:
                 "Start with Windows",
                 self.on_toggle_auto_start,
                 checked=lambda item: self.settings_manager.is_auto_start_enabled()
+            ),
+            
+            # Admin Panel
+            Item(
+                "Admin Panel",
+                self.on_open_admin_panel,
+                enabled=lambda item: self.service_manager.get_state() == ServiceState.RUNNING
             ),
             
             # Logs
@@ -342,7 +351,34 @@ class TrayApplication:
         
         # Update menu to reflect new state
         self.icon.update_menu()
-    
+    def on_open_admin_panel(self, icon=None, item=None) -> None:
+        """
+        Handle Admin Panel menu action.
+
+        Opens the web admin panel in the system default browser.
+        Only works when the service is running.
+
+        Args:
+            icon: pystray icon instance (unused, required by pystray callback signature)
+            item: pystray menu item instance (unused, required by pystray callback signature)
+        """
+        logger.info("User action: Open Admin Panel")
+
+        if self.service_manager.get_state() != ServiceState.RUNNING:
+            logger.warning("Cannot open admin panel: service is not running")
+            return
+
+        try:
+            url = f"http://{self.service_manager.host}:{self.service_manager.port}/admin"
+            webbrowser.open(url)
+            logger.info(f"Opened admin panel: {url}")
+        except Exception as e:
+            logger.error(f"Failed to open admin panel: {e}")
+            self.notification_manager.notify_error(
+                "Kiro Gateway",
+                f"Failed to open admin panel: {e}"
+            )
+
     def on_open_logs(self, icon=None, item=None) -> None:
         """Handle Open Logs menu action."""
         logger.info("User action: Open Logs")

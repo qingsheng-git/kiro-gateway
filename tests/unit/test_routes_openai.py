@@ -381,6 +381,54 @@ class TestModelsEndpoint:
 
 
 # =============================================================================
+# Tests for usage limits endpoint (/v1/usage)
+# =============================================================================
+
+class TestUsageLimitsEndpoint:
+    """Tests for the GET /v1/usage endpoint."""
+    
+    def test_usage_requires_authentication(self, test_client):
+        """
+        What it does: Verifies usage endpoint requires authentication.
+        Purpose: Ensure protected endpoints are secured.
+        """
+        print("Action: GET /v1/usage without auth...")
+        response = test_client.get("/v1/usage")
+        
+        print(f"Status: {response.status_code}")
+        assert response.status_code == 401
+    
+    def test_usage_rejects_invalid_key(self, test_client, invalid_proxy_api_key):
+        """
+        What it does: Verifies usage endpoint rejects invalid API key.
+        Purpose: Ensure authentication is enforced.
+        """
+        print("Action: GET /v1/usage with invalid key...")
+        response = test_client.get(
+            "/v1/usage",
+            headers={"Authorization": f"Bearer {invalid_proxy_api_key}"}
+        )
+        
+        print(f"Status: {response.status_code}")
+        assert response.status_code == 401
+    
+    def test_usage_endpoint_exists(self, test_client, valid_proxy_api_key):
+        """
+        What it does: Verifies usage endpoint exists and is callable.
+        Purpose: Ensure endpoint is registered in router.
+        """
+        print("Action: GET /v1/usage with valid auth...")
+        response = test_client.get(
+            "/v1/usage",
+            headers={"Authorization": f"Bearer {valid_proxy_api_key}"}
+        )
+        
+        print(f"Status: {response.status_code}")
+        # Should not be 404 (endpoint exists)
+        assert response.status_code != 404
+
+
+# =============================================================================
 # Tests for chat completions endpoint (/v1/chat/completions)
 # =============================================================================
 
@@ -876,6 +924,30 @@ class TestRouterIntegration:
                 assert "POST" in route.methods
                 return
         pytest.fail("Chat completions endpoint not found")
+    
+    def test_router_has_usage_endpoint(self):
+        """
+        What it does: Verifies usage endpoint is registered.
+        Purpose: Ensure endpoint is available.
+        """
+        print("Checking: Router endpoints...")
+        routes = [route.path for route in router.routes]
+        
+        print(f"Found routes: {routes}")
+        assert "/v1/usage" in routes
+    
+    def test_usage_endpoint_uses_get_method(self):
+        """
+        What it does: Verifies usage endpoint uses GET method.
+        Purpose: Ensure correct HTTP method.
+        """
+        print("Checking: HTTP methods...")
+        for route in router.routes:
+            if route.path == "/v1/usage":
+                print(f"Route /v1/usage methods: {route.methods}")
+                assert "GET" in route.methods
+                return
+        pytest.fail("Usage endpoint not found")
 
 
 # =============================================================================

@@ -146,7 +146,10 @@ async def messages(
     if anthropic_version:
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
     
-    auth_manager: KiroAuthManager = request.app.state.auth_manager
+    # Multi-user auth: try credential manager first, fall back to default auth
+    credential_manager = getattr(request.app.state, "credential_manager", None)
+    pool_auth = credential_manager.get_next_auth_manager() if credential_manager else None
+    auth_manager: KiroAuthManager = pool_auth or request.app.state.auth_manager
     model_cache: ModelInfoCache = request.app.state.model_cache
     
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
@@ -256,6 +259,14 @@ async def messages(
     if auth_manager.auth_type == AuthType.KIRO_DESKTOP and auth_manager.profile_arn:
         profile_arn_for_payload = auth_manager.profile_arn
     
+    # Resolve model alias before building payload
+    from kiro.model_resolver import ModelResolver
+    model_resolver: ModelResolver = request.app.state.model_resolver
+    resolution = model_resolver.resolve(request_data.model)
+    if resolution.original_request != resolution.internal_id:
+        logger.info(f"Model resolved: '{request_data.model}' → '{resolution.internal_id}'")
+        request_data.model = resolution.internal_id
+
     try:
         kiro_payload = anthropic_to_kiro(
             request_data,
@@ -392,6 +403,9 @@ async def messages(
                         logger.info(f"HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                     else:
                         logger.info(f"HTTP 200 - POST /v1/messages (streaming) - completed")
+                    # Record usage for multi-user tracking
+                    if not streaming_error and credential_manager:
+                        credential_manager.record_usage(auth_manager)
                     
                     if debug_logger:
                         if streaming_error:
@@ -421,6 +435,10 @@ async def messages(
             await http_client.close()
             
             logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
+            
+            # Record usage for multi-user tracking
+            if credential_manager:
+                credential_manager.record_usage(auth_manager)
             
             if debug_logger:
                 debug_logger.discard_buffers()

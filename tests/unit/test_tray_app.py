@@ -450,3 +450,108 @@ class TestTrayApplicationErrorHandling:
         call_args = mock_notification_manager.notify_error.call_args
         assert "Missing dependencies" in call_args[0][1]
         assert "pip install" in call_args[0][1]
+
+
+class TestTrayApplicationAdminPanelMenu:
+    """Tests for Admin Panel menu item integration."""
+
+    def _get_menu_item_labels(self, mock_pystray_module):
+        """
+        Extract menu item labels from pystray.MenuItem call history.
+
+        Returns a list of label strings in the order they were created.
+        Skips items with lambda labels (like the Status display).
+        """
+        labels = []
+        for call in mock_pystray_module.MenuItem.call_args_list:
+            args, kwargs = call
+            if args and isinstance(args[0], str):
+                labels.append(args[0])
+        return labels
+
+    def _get_menu_item_kwargs(self, mock_pystray_module, label: str):
+        """
+        Get the kwargs passed to MenuItem for a specific label.
+
+        Args:
+            mock_pystray_module: The mocked pystray module.
+            label: The menu item label to find.
+
+        Returns:
+            Tuple of (args, kwargs) for the matching MenuItem call, or None.
+        """
+        for call in mock_pystray_module.MenuItem.call_args_list:
+            args, kwargs = call
+            if args and args[0] == label:
+                return args, kwargs
+        return None
+
+    def test_menu_contains_admin_panel_item(self, tray_app, mock_pystray_module):
+        """Test that build_menu creates an 'Admin Panel' menu item."""
+        mock_pystray_module.MenuItem.reset_mock()
+        tray_app.build_menu()
+        labels = self._get_menu_item_labels(mock_pystray_module)
+        assert "Admin Panel" in labels
+
+    def test_admin_panel_appears_before_open_logs(self, tray_app, mock_pystray_module):
+        """Test that 'Admin Panel' menu item is positioned before 'Open Logs'."""
+        mock_pystray_module.MenuItem.reset_mock()
+        tray_app.build_menu()
+        labels = self._get_menu_item_labels(mock_pystray_module)
+        admin_idx = labels.index("Admin Panel")
+        logs_idx = labels.index("Open Logs")
+        assert admin_idx < logs_idx
+
+    def test_admin_panel_disabled_when_service_stopped(
+        self, tray_app, mock_service_manager, mock_pystray_module
+    ):
+        """Test that 'Admin Panel' is disabled when service is not running."""
+        mock_service_manager.get_state.return_value = ServiceState.STOPPED
+        mock_pystray_module.MenuItem.reset_mock()
+        tray_app.build_menu()
+
+        result = self._get_menu_item_kwargs(mock_pystray_module, "Admin Panel")
+        assert result is not None, "Admin Panel menu item not found"
+        args, kwargs = result
+        enabled_fn = kwargs.get("enabled")
+        assert enabled_fn is not None, "Admin Panel should have an enabled callback"
+        assert enabled_fn(None) is False
+
+    def test_admin_panel_enabled_when_service_running(
+        self, tray_app, mock_service_manager, mock_pystray_module
+    ):
+        """Test that 'Admin Panel' is enabled when service is running."""
+        mock_service_manager.get_state.return_value = ServiceState.RUNNING
+        mock_pystray_module.MenuItem.reset_mock()
+        tray_app.build_menu()
+
+        result = self._get_menu_item_kwargs(mock_pystray_module, "Admin Panel")
+        assert result is not None, "Admin Panel menu item not found"
+        args, kwargs = result
+        enabled_fn = kwargs.get("enabled")
+        assert enabled_fn is not None, "Admin Panel should have an enabled callback"
+        assert enabled_fn(None) is True
+
+    @patch("kiro.tray_app.webbrowser.open")
+    def test_on_open_admin_panel_opens_browser(
+        self, mock_wb_open, tray_app, mock_service_manager
+    ):
+        """Test that on_open_admin_panel calls webbrowser.open with correct URL."""
+        mock_service_manager.get_state.return_value = ServiceState.RUNNING
+        mock_service_manager.host = "127.0.0.1"
+        mock_service_manager.port = 8000
+
+        tray_app.on_open_admin_panel()
+
+        mock_wb_open.assert_called_once_with("http://127.0.0.1:8000/admin")
+
+    @patch("kiro.tray_app.webbrowser.open")
+    def test_on_open_admin_panel_noop_when_stopped(
+        self, mock_wb_open, tray_app, mock_service_manager
+    ):
+        """Test that on_open_admin_panel does nothing when service is stopped."""
+        mock_service_manager.get_state.return_value = ServiceState.STOPPED
+
+        tray_app.on_open_admin_panel()
+
+        mock_wb_open.assert_not_called()

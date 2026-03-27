@@ -6,18 +6,35 @@
 
 [🇷🇺 Русский](docs/ru/README.md) • [🇨🇳 中文](docs/zh/README.md) • [🇪🇸 Español](docs/es/README.md) • [🇮🇩 Indonesia](docs/id/README.md) • [🇧🇷 Português](docs/pt/README.md) • [🇯🇵 日本語](docs/ja/README.md) • [🇰🇷 한국어](docs/ko/README.md)
 
-Made with ❤️ by [@Jwadow](https://github.com/jwadow)
+Made with ❤️ by [@Jwadow](https://github.com/jwadow) | Fork maintained by [@qingsheng-git](https://github.com/qingsheng-git)
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![Sponsor](https://img.shields.io/badge/💖_Sponsor-Support_Development-ff69b4)](#-support-the-project)
 
 *Use Claude models from Kiro with Claude Code, OpenCode, Codex app, Cursor, Cline, Roo Code, Kilo Code, Obsidian, OpenAI SDK, LangChain, Continue and other OpenAI or Anthropic compatible tools*
 
-[Models](#-supported-models) • [Features](#-features) • [Quick Start](#-quick-start) • [Configuration](#%EF%B8%8F-configuration) • [💖 Sponsor](#-support-the-project)
+[Fork Changes](#-fork-changes) • [Models](#-available-models) • [Features](#-features) • [Quick Start](#-quick-start) • [Configuration](#%EF%B8%8F-configuration)
 
 </div>
+
+---
+
+## 🔀 Fork Changes
+
+This is a fork of [Jwadow/kiro-gateway](https://github.com/Jwadow/kiro-gateway) with the following additions:
+
+| Change | Description |
+|--------|-------------|
+| 🌐 **Web Admin Panel** | Browser-based management interface at `/admin` — view available models, manage model aliases (create/delete), manage multiple credential profiles (add/remove/enable/disable/validate), query quota usage, all with API key authentication |
+| 🔑 **Multi-Credential Management** | Support multiple credential profiles with round-robin rotation, per-profile enable/disable, validation, and quota querying via `CredentialManager` |
+| 🪟 **Windows System Tray Mode** | Run the gateway as a background service with system tray icon, right-click menu for start/stop/restart, auto-start with Windows, health monitoring, and error notifications |
+| 📦 **Windows Executable Packaging** | Package as a standalone `.exe` via PyInstaller — no Python installation required. Single-file distribution (~50-80 MB), auto tray mode on double-click |
+| 🧩 **New Models** | Added DeepSeek-V3.2, MiniMax M2.1, Qwen3-Coder-Next to the supported model list |
+| 🖥️ **Console Encoding Fix** | Graceful fallback for non-UTF-8 consoles (e.g., Windows GBK) in startup banner |
+| 📝 **Frozen Mode Support** | Proper logging and uvicorn configuration when running as a PyInstaller bundle |
+
+> Upstream features (v2.3 and earlier) are fully included. See the [original repo](https://github.com/Jwadow/kiro-gateway) for upstream changelog.
 
 ---
 
@@ -570,12 +587,71 @@ Leave `VPN_PROXY_URL` empty (default) if you don't need proxy support.
 | `/` | GET | Health check |
 | `/health` | GET | Detailed health check |
 | `/v1/models` | GET | List available models |
+| `/v1/usage` | GET | Get usage limits and current usage |
 | `/v1/chat/completions` | POST | OpenAI Chat Completions API |
 | `/v1/messages` | POST | Anthropic Messages API |
 
 ---
 
 ## 💡 Usage Examples
+
+### Query Usage Limits
+
+<details>
+<summary>🔹 Get Usage Limits (cURL)</summary>
+
+```bash
+curl http://localhost:8000/v1/usage \
+  -H "Authorization: Bearer my-super-secret-password-123"
+```
+
+**Response:**
+```json
+{
+  "daysUntilReset": 0,
+  "usageBreakdownList": [
+    {
+      "resourceType": "CREDIT",
+      "unit": "INVOCATIONS",
+      "displayName": "Credit",
+      "displayNamePlural": "Credits",
+      "currentUsage": 10.05,
+      "usageLimit": 50.0,
+      "nextDateReset": 1775001600
+    }
+  ],
+  "subscriptionInfo": {
+    "type": "Q_DEVELOPER_STANDALONE_FREE",
+    "subscriptionTitle": "KIRO FREE",
+    "upgradeCapability": "UPGRADE_CAPABLE",
+    "subscriptionManagementTarget": "PURCHASE"
+  },
+  "nextDateReset": 1775001600
+}
+```
+
+> **Note:** This endpoint returns your current usage and limits for your Kiro subscription.
+
+</details>
+
+<details>
+<summary>🐍 Python OpenAI SDK</summary>
+
+```python
+import requests
+
+response = requests.get(
+    "http://localhost:8000/v1/usage",
+    headers={"Authorization": "Bearer my-super-secret-password-123"}
+)
+
+usage_data = response.json()
+print(f"Current usage: {usage_data['usageBreakdownList'][0]['currentUsage']}")
+print(f"Usage limit: {usage_data['usageBreakdownList'][0]['usageLimit']}")
+print(f"Subscription: {usage_data['subscriptionInfo']['subscriptionTitle']}")
+```
+
+</details>
 
 ### OpenAI API
 
@@ -840,38 +916,6 @@ By submitting a contribution to this project, you agree to the terms of our [Con
 - You have the right to submit the contribution
 - You grant the maintainer rights to use and relicense your contribution
 - The project remains legally protected
-
----
-
-## 💖 Support the Project
-
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Smiling%20Face%20with%20Hearts.png" alt="Love" width="80" />
-
-**If this project saved you time or money, consider supporting it!**
-
-Every contribution helps keep this project alive and growing
-
-<br>
-
-### 🤑 Donate
-
-[**☕ One-time Donation**](https://app.lava.top/jwadow?tabId=donate) &nbsp;•&nbsp; [**💎 Monthly Support**](https://app.lava.top/jwadow?tabId=subscriptions)
-
-<br>
-
-### 🪙 Or send crypto
-
-| Currency | Network | Address |
-|:--------:|:-------:|:--------|
-| **USDT** | TRC20 | `TSVtgRc9pkC1UgcbVeijBHjFmpkYHDRu26` |
-| **BTC** | Bitcoin | `12GZqxqpcBsqJ4Vf1YreLqwoMGvzBPgJq6` |
-| **ETH** | Ethereum | `0xc86eab3bba3bbaf4eb5b5fff8586f1460f1fd395` |
-| **SOL** | Solana | `9amykF7KibZmdaw66a1oqYJyi75fRqgdsqnG66AK3jvh` |
-| **TON** | TON | `UQBVh8T1H3GI7gd7b-_PPNnxHYYxptrcCVf3qQk5v41h3QTM` |
-
-</div>
 
 ---
 

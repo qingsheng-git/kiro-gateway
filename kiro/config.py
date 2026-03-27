@@ -27,7 +27,7 @@ Loads environment variables and provides typed access to them.
 import os
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -119,6 +119,29 @@ PROXY_API_KEY: str = os.getenv("PROXY_API_KEY", "my-super-secret-password-123")
 #   VPN_PROXY_URL=http://user:password@proxy.company.com:8080
 #   VPN_PROXY_URL=192.168.1.100:8080  (defaults to http://)
 VPN_PROXY_URL: str = os.getenv("VPN_PROXY_URL", "")
+
+# ==================================================================================================
+# SSL/TLS Settings
+# ==================================================================================================
+
+# SSL certificate verification for Kiro API requests.
+# Set to "false" to disable SSL verification (useful for corporate proxies
+# like Zscaler that intercept HTTPS with their own certificates).
+#
+# WARNING: Disabling SSL verification reduces security. Only use in trusted networks.
+#
+# Options:
+#   SSL_VERIFY=true          (default) Verify SSL certificates normally
+#   SSL_VERIFY=false         Disable SSL verification entirely
+#   SSL_VERIFY=/path/to/ca   Use a custom CA bundle file
+_ssl_verify_raw: str = os.getenv("SSL_VERIFY", "true").strip()
+if _ssl_verify_raw.lower() in ("false", "0", "no", "off"):
+    SSL_VERIFY: Any = False
+elif _ssl_verify_raw.lower() in ("true", "1", "yes", "on"):
+    SSL_VERIFY: Any = True
+else:
+    # Treat as a path to a CA bundle file
+    SSL_VERIFY: Any = _ssl_verify_raw
 
 # ==================================================================================================
 # Kiro API Credentials

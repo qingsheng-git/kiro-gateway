@@ -280,3 +280,66 @@ class ChatCompletionChunk(BaseModel):
     model: str
     choices: List[ChatCompletionChunkChoice]
     usage: Optional[ChatCompletionUsage] = None
+
+
+# ==================================================================================================
+# Models for /v1/usage endpoint
+# ==================================================================================================
+
+class UsageBreakdownItem(BaseModel):
+    """
+    Usage breakdown for a specific resource type.
+    
+    Attributes:
+        resourceType: Type of resource (e.g., "CREDIT", "AGENTIC_REQUEST")
+        unit: Unit of measurement (e.g., "INVOCATIONS")
+        displayName: Human-readable name
+        displayNamePlural: Plural form of display name
+        currentUsage: Current usage amount
+        usageLimit: Maximum allowed usage
+        nextDateReset: Timestamp of next reset
+    """
+    resourceType: str
+    unit: str
+    displayName: str
+    displayNamePlural: str
+    currentUsage: float
+    usageLimit: float
+    nextDateReset: int
+    model_config = {"extra": "allow"}
+
+
+class SubscriptionInfo(BaseModel):
+    """
+    Subscription information.
+    
+    Attributes:
+        type: Subscription type (e.g., "Q_DEVELOPER_STANDALONE_FREE")
+        subscriptionTitle: Human-readable subscription title
+        upgradeCapability: Whether upgrade is possible
+        subscriptionManagementTarget: Where to manage subscription
+    """
+    type: str
+    subscriptionTitle: str
+    upgradeCapability: str
+    subscriptionManagementTarget: str
+    model_config = {"extra": "allow"}
+
+
+class UsageLimitsResponse(BaseModel):
+    """
+    Response from /getUsageLimits endpoint.
+    
+    Contains information about user's usage limits and current usage.
+    
+    Attributes:
+        daysUntilReset: Days until usage reset
+        usageBreakdownList: List of usage breakdowns by resource type
+        subscriptionInfo: Subscription information
+        nextDateReset: Timestamp of next reset
+    """
+    daysUntilReset: int
+    usageBreakdownList: List[UsageBreakdownItem]
+    subscriptionInfo: SubscriptionInfo
+    nextDateReset: int
+    model_config = {"extra": "allow"}

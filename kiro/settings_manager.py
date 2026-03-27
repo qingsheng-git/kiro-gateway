@@ -5,9 +5,9 @@ This module manages persistent configuration including auto-start preferences,
 server settings, and Windows registry integration for startup.
 """
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 import json
 import sys
 import shutil
@@ -21,13 +21,14 @@ class TraySettings:
     server_host: str = "0.0.0.0"
     server_port: int = 8000
     last_state: str = "stopped"
+    model_aliases: Dict[str, str] = field(default_factory=dict)
     
     def to_dict(self) -> dict:
         """
         Convert to dictionary for JSON serialization.
         
         Returns:
-            Dictionary representation of settings
+            Dictionary representation of settings including model_aliases
         """
         return asdict(self)
     
@@ -36,12 +37,18 @@ class TraySettings:
         """
         Create from dictionary (JSON deserialization).
         
+        Backward-compatible: if model_aliases is missing from the data
+        (old format), defaults to an empty dictionary.
+        
         Args:
             data: Dictionary containing settings data
         
         Returns:
             TraySettings instance
         """
+        # Ensure model_aliases exists for backward compatibility with old format
+        if 'model_aliases' not in data:
+            data = {**data, 'model_aliases': {}}
         return cls(**data)
 
 

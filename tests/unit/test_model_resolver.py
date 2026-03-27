@@ -1738,3 +1738,71 @@ class TestAliasSystemSecurity:
         print(f"Received suggestions: {suggestions}")
         # This is expected behavior - alias name doesn't contain family
         assert len(suggestions) > 0
+
+
+class TestUpdateAliases:
+    """Tests for ModelResolver.update_aliases() runtime alias updates."""
+
+    def test_update_aliases_replaces_existing(self, mock_model_cache):
+        """
+        What it does: update_aliases replaces the entire alias dict.
+        Purpose: Verify aliases are fully replaced, not merged.
+        """
+        initial = {"old-alias": "claude-sonnet-4"}
+        resolver = ModelResolver(cache=mock_model_cache, aliases=initial)
+
+        resolver.update_aliases({"new-alias": "claude-haiku-4.5"})
+
+        assert "new-alias" in resolver.aliases
+        assert "old-alias" not in resolver.aliases
+
+    def test_update_aliases_takes_effect_immediately(self, mock_model_cache):
+        """
+        What it does: resolve() uses updated aliases right away.
+        Purpose: Verify no restart needed after update_aliases (Req 4.4, 5.4).
+        """
+        resolver = ModelResolver(cache=mock_model_cache, aliases={})
+
+        result_before = resolver.resolve("my-fast")
+        assert result_before.source == "passthrough"
+
+        resolver.update_aliases({"my-fast": "claude-haiku-4.5"})
+
+        result_after = resolver.resolve("my-fast")
+        assert result_after.internal_id == "claude-haiku-4.5"
+        assert result_after.source == "cache"
+
+    def test_update_aliases_with_empty_dict(self, mock_model_cache):
+        """
+        What it does: Clearing all aliases via empty dict works.
+        Purpose: Verify deletion path — all aliases removed at once.
+        """
+        resolver = ModelResolver(
+            cache=mock_model_cache,
+            aliases={"a": "claude-sonnet-4", "b": "claude-haiku-4.5"},
+        )
+
+        resolver.update_aliases({})
+
+        assert resolver.aliases == {}
+        result = resolver.resolve("a")
+        assert result.source == "passthrough"
+
+    def test_update_aliases_does_not_affect_other_state(self, mock_model_cache):
+        """
+        What it does: update_aliases only touches self.aliases.
+        Purpose: Ensure hidden_models, cache, hidden_from_list are untouched.
+        """
+        hidden = {"secret-model": "secret-internal-id"}
+        resolver = ModelResolver(
+            cache=mock_model_cache,
+            hidden_models=hidden,
+            aliases={"x": "y"},
+            hidden_from_list=["auto"],
+        )
+
+        resolver.update_aliases({"new": "claude-sonnet-4"})
+
+        assert resolver.hidden_models == hidden
+        assert resolver.hidden_from_list == {"auto"}
+        assert resolver.cache is mock_model_cache

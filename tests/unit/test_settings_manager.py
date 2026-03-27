@@ -276,3 +276,225 @@ class TestRegistryOperations:
             assert "--tray" in command
             # Should have quotes around paths
             assert '"' in command
+
+
+# =============================================================================
+# Model Aliases Extension Tests (Task 1.4)
+# Validates: Requirements 6.1, 6.5
+# =============================================================================
+
+
+class TestTraySettingsModelAliases:
+    """Tests for TraySettings model_aliases field serialization/deserialization."""
+
+    def test_default_model_aliases_is_empty_dict(self):
+        """
+        Test that TraySettings defaults model_aliases to an empty dict.
+
+        What it does: Creates TraySettings with no arguments and checks model_aliases.
+        Purpose: Ensure backward-compatible default for the new field.
+        """
+        settings = TraySettings()
+
+        assert settings.model_aliases == {}
+        assert isinstance(settings.model_aliases, dict)
+
+    def test_to_dict_includes_model_aliases(self):
+        """
+        Test that to_dict() includes model_aliases in the output.
+
+        What it does: Creates TraySettings with aliases and serializes via to_dict().
+        Purpose: Ensure model_aliases is persisted during serialization.
+        """
+        aliases = {"my-opus": "claude-opus-4.5", "fast": "claude-haiku-4.5"}
+        settings = TraySettings(model_aliases=aliases)
+
+        result = settings.to_dict()
+
+        assert "model_aliases" in result
+        assert result["model_aliases"] == aliases
+
+    def test_to_dict_with_empty_aliases(self):
+        """
+        Test that to_dict() correctly serializes empty model_aliases.
+
+        What it does: Creates TraySettings with default (empty) aliases and serializes.
+        Purpose: Ensure empty dict is preserved, not omitted.
+        """
+        settings = TraySettings()
+
+        result = settings.to_dict()
+
+        assert "model_aliases" in result
+        assert result["model_aliases"] == {}
+
+    def test_from_dict_with_model_aliases(self):
+        """
+        Test that from_dict() correctly restores model_aliases.
+
+        What it does: Creates TraySettings from a dict containing model_aliases.
+        Purpose: Ensure deserialization correctly populates the field.
+        """
+        data = {
+            "auto_start": False,
+            "server_host": "0.0.0.0",
+            "server_port": 8000,
+            "last_state": "stopped",
+            "model_aliases": {"gpt4": "claude-opus-4.5", "fast": "claude-haiku-4.5"},
+        }
+
+        settings = TraySettings.from_dict(data)
+
+        assert settings.model_aliases == {"gpt4": "claude-opus-4.5", "fast": "claude-haiku-4.5"}
+
+    def test_from_dict_old_format_no_model_aliases(self):
+        """
+        Test backward compatibility: from_dict() with old format (no model_aliases key).
+
+        What it does: Creates TraySettings from a dict that lacks model_aliases.
+        Purpose: Ensure old settings files without model_aliases load correctly.
+        """
+        old_format_data = {
+            "auto_start": True,
+            "server_host": "127.0.0.1",
+            "server_port": 9000,
+            "last_state": "running",
+        }
+
+        settings = TraySettings.from_dict(old_format_data)
+
+        assert settings.model_aliases == {}
+        assert settings.auto_start is True
+        assert settings.server_host == "127.0.0.1"
+
+    def test_to_dict_from_dict_roundtrip_with_aliases(self):
+        """
+        Test that to_dict/from_dict round-trip preserves model_aliases.
+
+        What it does: Serializes and deserializes TraySettings with aliases.
+        Purpose: Ensure no data loss during the conversion cycle.
+        """
+        original = TraySettings(
+            auto_start=True,
+            server_host="localhost",
+            server_port=3000,
+            last_state="running",
+            model_aliases={"alias-a": "model-a", "alias-b": "model-b"},
+        )
+
+        restored = TraySettings.from_dict(original.to_dict())
+
+        assert restored.model_aliases == original.model_aliases
+        assert restored.auto_start == original.auto_start
+        assert restored.server_host == original.server_host
+        assert restored.server_port == original.server_port
+        assert restored.last_state == original.last_state
+
+
+class TestSettingsManagerModelAliasesPersistence:
+    """Tests for SettingsManager save/load with model_aliases."""
+
+    def test_save_and_load_with_model_aliases(self, tmp_path):
+        """
+        Test that SettingsManager correctly persists and loads model_aliases.
+
+        What it does: Saves settings with aliases to a temp file, loads them back.
+        Purpose: Ensure the full file I/O cycle preserves alias data.
+        """
+        settings_file = tmp_path / "settings.json"
+        manager = SettingsManager(settings_file=settings_file)
+        aliases = {"my-model": "claude-sonnet-4", "quick": "claude-haiku-4.5"}
+
+        original = TraySettings(model_aliases=aliases)
+        manager.save(original)
+        loaded = manager.load()
+
+        assert loaded.model_aliases == aliases
+
+    def test_save_and_load_with_empty_aliases(self, tmp_path):
+        """
+        Test that SettingsManager handles empty model_aliases correctly.
+
+        What it does: Saves settings with empty aliases, loads them back.
+        Purpose: Ensure empty dict survives the persistence cycle.
+        """
+        settings_file = tmp_path / "settings.json"
+        manager = SettingsManager(settings_file=settings_file)
+
+        original = TraySettings(model_aliases={})
+        manager.save(original)
+        loaded = manager.load()
+
+        assert loaded.model_aliases == {}
+
+    def test_load_old_format_file_without_model_aliases(self, tmp_path):
+        """
+        Test loading a settings file written in old format (no model_aliases key).
+
+        What it does: Writes a JSON file without model_aliases, loads via SettingsManager.
+        Purpose: Ensure backward compatibility with pre-alias settings files.
+        """
+        settings_file = tmp_path / "settings.json"
+        # Simulate an old-format file written before model_aliases existed
+        import json
+        old_data = {
+            "auto_start": True,
+            "server_host": "192.168.1.1",
+            "server_port": 7000,
+            "last_state": "stopped",
+        }
+        settings_file.write_text(json.dumps(old_data), encoding="utf-8")
+
+        manager = SettingsManager(settings_file=settings_file)
+        loaded = manager.load()
+
+        assert loaded.model_aliases == {}
+        assert loaded.auto_start is True
+        assert loaded.server_host == "192.168.1.1"
+        assert loaded.server_port == 7000
+
+    def test_corrupted_file_recovery_preserves_model_aliases_default(self, tmp_path):
+        """
+        Test that corrupted file recovery returns default TraySettings with empty model_aliases.
+
+        What it does: Writes corrupted JSON, loads via SettingsManager.
+        Purpose: Ensure recovery from corruption still includes model_aliases field.
+        """
+        settings_file = tmp_path / "settings.json"
+        settings_file.write_text("{{{{not valid json at all!!!!", encoding="utf-8")
+
+        manager = SettingsManager(settings_file=settings_file)
+        loaded = manager.load()
+
+        # Should recover with defaults, including empty model_aliases
+        assert loaded.model_aliases == {}
+        assert loaded.auto_start is False
+        assert loaded.server_host == "0.0.0.0"
+        assert loaded.server_port == 8000
+
+        # Backup should have been created
+        backup_file = tmp_path / "settings.json.bak"
+        assert backup_file.exists()
+
+    def test_corrupted_file_recovery_then_save_with_aliases(self, tmp_path):
+        """
+        Test that after recovering from corruption, aliases can be saved and loaded.
+
+        What it does: Recovers from corrupted file, saves new settings with aliases, loads again.
+        Purpose: Ensure the recovery path doesn't break subsequent alias persistence.
+        """
+        settings_file = tmp_path / "settings.json"
+        settings_file.write_text("not json", encoding="utf-8")
+
+        manager = SettingsManager(settings_file=settings_file)
+        # First load triggers recovery
+        recovered = manager.load()
+        assert recovered.model_aliases == {}
+
+        # Now save with aliases
+        new_settings = TraySettings(model_aliases={"test-alias": "test-model"})
+        manager.save(new_settings)
+
+        # Load again and verify aliases persisted
+        reloaded = manager.load()
+        assert reloaded.model_aliases == {"test-alias": "test-model"}

@@ -29,3 +29,16 @@ requests/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Kiro IDE
+.kiro/
+
+# Hypothesis test cache
+.hypothesis/
+
+# Environment copies with real credentials
+.env copy
+
+# Temporary release files
+QUICK_RELEASE_INFO.txt
+RELEASE_TAG.txt

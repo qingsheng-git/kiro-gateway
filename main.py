@@ -73,13 +73,17 @@ from kiro.config import (
     HIDDEN_FROM_LIST,
     FALLBACK_MODELS,
     VPN_PROXY_URL,
+    SSL_VERIFY,
     _warn_timeout_configuration,
 )
 from kiro.auth import KiroAuthManager
 from kiro.cache import ModelInfoCache
 from kiro.model_resolver import ModelResolver
+from kiro.settings_manager import SettingsManager
+from kiro.credential_manager import CredentialManager
 from kiro.routes_openai import router as openai_router
 from kiro.routes_anthropic import router as anthropic_router
+from kiro.routes_admin import admin_router
 from kiro.exceptions import validation_exception_handler
 from kiro.debug_middleware import DebugLoggerMiddleware
 
@@ -216,6 +220,13 @@ if VPN_PROXY_URL:
     logger.debug(f"NO_PROXY: {os.environ['NO_PROXY']}")
 
 
+# --- SSL Verification ---
+if SSL_VERIFY is False:
+    logger.warning("SSL verification is DISABLED (SSL_VERIFY=false). This reduces security.")
+elif SSL_VERIFY is not True:
+    logger.info(f"SSL verification using custom CA bundle: {SSL_VERIFY}")
+
+
 # --- Configuration Validation ---
 def validate_configuration() -> None:
     """
@@ -348,7 +359,8 @@ async def lifespan(app: FastAPI):
     app.state.http_client = httpx.AsyncClient(
         limits=limits,
         timeout=timeout,
-        follow_redirects=True
+        follow_redirects=True,
+        verify=SSL_VERIFY,
     )
     logger.info("Shared HTTP client created with connection pooling")
     
@@ -383,7 +395,7 @@ async def lifespan(app: FastAPI):
         list_models_url = f"{app.state.auth_manager.q_host}/ListAvailableModels"
         logger.debug(f"Fetching models from: {list_models_url}")
         
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, verify=SSL_VERIFY) as client:
             response = await client.get(
                 list_models_url,
                 headers=headers,
@@ -418,18 +430,48 @@ async def lifespan(app: FastAPI):
     all_models = app.state.model_cache.get_all_model_ids()
     logger.info(f"Model cache ready: {len(all_models)} models total")
     
+    # Load persisted alias configuration from SettingsManager
+    settings_file = Path.home() / ".kiro-gateway" / "tray_settings.json"
+    settings_manager = SettingsManager(settings_file)
+    saved_settings = settings_manager.load()
+    
+    # Use saved aliases if non-empty, otherwise fall back to config.py defaults
+    effective_aliases = saved_settings.model_aliases if saved_settings.model_aliases else MODEL_ALIASES
+    
+    # Store settings_manager on app.state for use by admin API endpoints
+    app.state.settings_manager = settings_manager
+    
+    # Initialize multi-user credential manager
+    credentials_file = Path.home() / ".kiro-gateway" / "credentials.json"
+    credential_manager = CredentialManager(
+        credentials_file=credentials_file,
+        default_region=REGION,
+    )
+    credential_manager.load()
+    app.state.credential_manager = credential_manager
+    
+    if credential_manager.profile_count > 0:
+        enabled_count = len(credential_manager.enabled_profiles)
+        logger.info(
+            f"Credential manager ready: {credential_manager.profile_count} profile(s), "
+            f"{enabled_count} enabled"
+        )
+    else:
+        logger.info("Credential manager ready: no extra profiles (using default auth)")
+    
     # Create model resolver (uses cache + hidden models + aliases for resolution)
     app.state.model_resolver = ModelResolver(
         cache=app.state.model_cache,
         hidden_models=HIDDEN_MODELS,
-        aliases=MODEL_ALIASES,
+        aliases=effective_aliases,
         hidden_from_list=HIDDEN_FROM_LIST
     )
     logger.info("Model resolver initialized")
     
-    # Log alias configuration if any
-    if MODEL_ALIASES:
-        logger.debug(f"Model aliases configured: {list(MODEL_ALIASES.keys())}")
+    # Log alias configuration
+    if effective_aliases:
+        source = "settings file" if saved_settings.model_aliases else "config.py defaults"
+        logger.info(f"Model aliases loaded from {source}: {list(effective_aliases.keys())}")
     if HIDDEN_FROM_LIST:
         logger.debug(f"Models hidden from list: {HIDDEN_FROM_LIST}")
     
@@ -481,6 +523,9 @@ app.include_router(openai_router)
 
 # Anthropic-compatible API: /v1/messages
 app.include_router(anthropic_router)
+
+# Admin panel: /admin, /admin/api/*
+app.include_router(admin_router)
 
 
 # --- Uvicorn log config ---
