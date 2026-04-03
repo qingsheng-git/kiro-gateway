@@ -23,6 +23,7 @@ class TraySettings:
     last_state: str = "stopped"
     model_aliases: Dict[str, str] = field(default_factory=dict)
     proxy_api_key: str = ""
+    cache_enabled: bool = False
     
     def to_dict(self) -> dict:
         """
@@ -52,6 +53,8 @@ class TraySettings:
             data = {**data, 'model_aliases': {}}
         if 'proxy_api_key' not in data:
             data = {**data, 'proxy_api_key': ''}
+        if 'cache_enabled' not in data:
+            data = {**data, 'cache_enabled': False}
         return cls(**data)
 
 

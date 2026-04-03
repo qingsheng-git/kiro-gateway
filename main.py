@@ -442,6 +442,42 @@ async def lifespan(app: FastAPI):
             f"Credential manager ready: {credential_manager.profile_count} profile(s), "
             f"{enabled_count} enabled"
         )
+        
+        # Fetch models from each enabled credential profile and merge into cache
+        # This ensures the model list reflects the union of all credentials' permissions
+        for profile in credential_manager.enabled_profiles:
+            try:
+                token = await profile.auth_manager.get_access_token()
+                from kiro.utils import get_kiro_headers
+                from kiro.auth import AuthType
+                headers = get_kiro_headers(profile.auth_manager, token)
+                
+                params = {"origin": "AI_EDITOR"}
+                if profile.auth_manager.auth_type == AuthType.KIRO_DESKTOP and profile.auth_manager.profile_arn:
+                    params["profileArn"] = profile.auth_manager.profile_arn
+                
+                list_models_url = f"{profile.auth_manager.q_host}/ListAvailableModels"
+                
+                async with httpx.AsyncClient(timeout=30, verify=SSL_VERIFY) as client:
+                    response = await client.get(
+                        list_models_url,
+                        headers=headers,
+                        params=params
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        models_list = data.get("models", [])
+                        # Merge into existing cache (additive — union of all profiles)
+                        for model in models_list:
+                            model_id = model.get("modelId")
+                            if model_id and not app.state.model_cache.get(model_id):
+                                app.state.model_cache._cache[model_id] = model
+                        logger.info(f"Merged {len(models_list)} models from credential '{profile.name}'")
+                    else:
+                        logger.warning(f"Failed to fetch models for credential '{profile.name}': HTTP {response.status_code}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch models for credential '{profile.name}': {e}")
     else:
         logger.info("Credential manager ready: no extra profiles (using default auth)")
     
@@ -453,6 +489,15 @@ async def lifespan(app: FastAPI):
         hidden_from_list=HIDDEN_FROM_LIST
     )
     logger.info("Model resolver initialized")
+    
+    # Initialize response cache
+    from kiro.response_cache import ResponseCache
+    app.state.response_cache = ResponseCache(
+        max_size=200,
+        ttl=3600,
+        enabled=saved_settings.cache_enabled,
+    )
+    logger.info(f"Response cache initialized (enabled={saved_settings.cache_enabled})")
     
     # Log alias configuration
     if effective_aliases:

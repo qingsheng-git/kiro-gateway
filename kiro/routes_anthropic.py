@@ -307,6 +307,16 @@ async def messages(
     url = f"{auth_manager.api_host}/generateAssistantResponse"
     logger.debug(f"Kiro API URL: {url}")
     
+    # Cache check: return cached response for non-streaming requests
+    response_cache = getattr(request.app.state, "response_cache", None)
+    if not request_data.stream and response_cache:
+        cached = response_cache.get(request_data)
+        if cached is not None:
+            logger.info("Returning cached response for /v1/messages")
+            if debug_logger:
+                debug_logger.discard_buffers()
+            return JSONResponse(content=cached)
+    
     if request_data.stream:
         # Streaming mode: per-request client prevents orphaned connections
         # when network interface changes (VPN disconnect/reconnect)
@@ -442,6 +452,10 @@ async def messages(
             await http_client.close()
             
             logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
+            
+            # Store in cache
+            if response_cache:
+                response_cache.put(request_data, anthropic_response)
             
             # Record usage for multi-user tracking
             if credential_manager:

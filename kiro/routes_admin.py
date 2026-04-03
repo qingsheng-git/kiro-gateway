@@ -117,6 +117,16 @@ class CredentialToggleRequest(BaseModel):
     enabled: bool
 
 
+class CacheToggleRequest(BaseModel):
+    """Request body for enabling/disabling the response cache.
+
+    Attributes:
+        enabled: New enabled state.
+    """
+
+    enabled: bool
+
+
 class ApiResponse(BaseModel):
     """Standard API response wrapper.
 
@@ -681,5 +691,89 @@ async def query_credential_quota(
         message=result.get("message", ""),
         data=result,
     )
+
+
+# =============================================================================
+# Cache Management Endpoints
+# =============================================================================
+
+
+@admin_router.get("/api/cache/stats", response_model=ApiResponse)
+async def get_cache_stats(
+    request: Request,
+    _auth: bool = Depends(verify_admin_api_key),
+) -> ApiResponse:
+    """Return response cache statistics.
+
+    Args:
+        request: The incoming FastAPI request.
+        _auth: Injected by ``verify_admin_api_key`` dependency.
+
+    Returns:
+        ApiResponse with cache stats in ``data``.
+    """
+    response_cache = getattr(request.app.state, "response_cache", None)
+    if response_cache is None:
+        return ApiResponse(success=True, message="ok", data={"enabled": False, "size": 0})
+
+    return ApiResponse(success=True, message="ok", data=response_cache.stats())
+
+
+@admin_router.put("/api/cache/toggle", response_model=ApiResponse)
+async def toggle_cache(
+    request: Request,
+    body: CacheToggleRequest,
+    _auth: bool = Depends(verify_admin_api_key),
+) -> ApiResponse:
+    """Enable or disable the response cache.
+
+    Persists the setting to ``tray_settings.json``.
+
+    Args:
+        request: The incoming FastAPI request.
+        body: ``CacheToggleRequest`` with the new enabled state.
+        _auth: Injected by ``verify_admin_api_key`` dependency.
+
+    Returns:
+        ApiResponse confirming the state change.
+    """
+    response_cache = getattr(request.app.state, "response_cache", None)
+    if response_cache is None:
+        raise HTTPException(status_code=500, detail="缓存未初始化")
+
+    response_cache.enabled = body.enabled
+
+    # Persist
+    settings_manager = getattr(request.app.state, "settings_manager", None)
+    if settings_manager:
+        settings = settings_manager.load()
+        settings.cache_enabled = body.enabled
+        settings_manager.save(settings)
+
+    state = "已启用" if body.enabled else "已禁用"
+    logger.info(f"Response cache {state} via admin panel")
+    return ApiResponse(success=True, message=f"响应缓存{state}")
+
+
+@admin_router.delete("/api/cache", response_model=ApiResponse)
+async def clear_cache(
+    request: Request,
+    _auth: bool = Depends(verify_admin_api_key),
+) -> ApiResponse:
+    """Clear all cached responses.
+
+    Args:
+        request: The incoming FastAPI request.
+        _auth: Injected by ``verify_admin_api_key`` dependency.
+
+    Returns:
+        ApiResponse with the number of entries removed.
+    """
+    response_cache = getattr(request.app.state, "response_cache", None)
+    if response_cache is None:
+        return ApiResponse(success=True, message="缓存未初始化", data={"removed": 0})
+
+    removed = response_cache.clear()
+    return ApiResponse(success=True, message=f"已清除 {removed} 条缓存", data={"removed": removed})
 
 

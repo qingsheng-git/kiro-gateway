@@ -24,7 +24,7 @@ from unittest.mock import Mock
 from hypothesis import given, settings, HealthCheck, assume
 from hypothesis import strategies as st
 
-from kiro.config import PROXY_API_KEY, HIDDEN_MODELS, HIDDEN_FROM_LIST
+from kiro.config import PROXY_API_KEY, get_proxy_api_key, HIDDEN_MODELS, HIDDEN_FROM_LIST
 from kiro.settings_manager import TraySettings
 
 
@@ -82,7 +82,7 @@ def admin_test_client(test_client):
 
 def _auth_headers() -> dict:
     """Return valid Bearer auth headers."""
-    return {"Authorization": f"Bearer {PROXY_API_KEY}"}
+    return {"Authorization": f"Bearer {get_proxy_api_key()}"}
 
 
 def _reset_aliases(client, original: dict) -> None:

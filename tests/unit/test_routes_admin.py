@@ -25,7 +25,7 @@ from kiro.routes_admin import (
     AliasResponse,
     ApiResponse,
 )
-from kiro.config import PROXY_API_KEY, APP_VERSION
+from kiro.config import PROXY_API_KEY, APP_VERSION, get_proxy_api_key
 
 
 # =============================================================================
@@ -52,7 +52,7 @@ def _make_request(headers: dict) -> Mock:
 
 def _auth_headers() -> dict:
     """Return valid Bearer auth headers for convenience."""
-    return {"Authorization": f"Bearer {PROXY_API_KEY}"}
+    return {"Authorization": f"Bearer {get_proxy_api_key()}"}
 
 
 # =============================================================================
@@ -69,7 +69,7 @@ class TestVerifyAdminApiKey:
         What it does: Verifies that a valid Bearer token passes authentication.
         Purpose: Ensure Authorization: Bearer auth method works.
         """
-        request = _make_request({"Authorization": f"Bearer {PROXY_API_KEY}"})
+        request = _make_request({"Authorization": f"Bearer {get_proxy_api_key()}"})
         result = await verify_admin_api_key(request)
         assert result is True
 
@@ -79,7 +79,7 @@ class TestVerifyAdminApiKey:
         What it does: Verifies that a valid X-API-Key header passes authentication.
         Purpose: Ensure X-API-Key fallback auth method works.
         """
-        request = _make_request({"X-API-Key": PROXY_API_KEY})
+        request = _make_request({"X-API-Key": get_proxy_api_key()})
         result = await verify_admin_api_key(request)
         assert result is True
 
@@ -90,7 +90,7 @@ class TestVerifyAdminApiKey:
         Purpose: Ensure correct priority when both headers are present.
         """
         request = _make_request({
-            "Authorization": f"Bearer {PROXY_API_KEY}",
+            "Authorization": f"Bearer {get_proxy_api_key()}",
             "X-API-Key": "wrong-key",
         })
         result = await verify_admin_api_key(request)
@@ -102,7 +102,7 @@ class TestVerifyAdminApiKey:
         What it does: Verifies X-API-Key is used when Authorization is absent.
         Purpose: Ensure fallback works correctly.
         """
-        request = _make_request({"X-API-Key": PROXY_API_KEY})
+        request = _make_request({"X-API-Key": get_proxy_api_key()})
         result = await verify_admin_api_key(request)
         assert result is True
 
@@ -157,7 +157,7 @@ class TestVerifyAdminApiKey:
         What it does: Verifies that a raw key without "Bearer " prefix is rejected.
         Purpose: Ensure the Authorization header format is enforced.
         """
-        request = _make_request({"Authorization": PROXY_API_KEY})
+        request = _make_request({"Authorization": get_proxy_api_key()})
         with pytest.raises(HTTPException) as exc_info:
             await verify_admin_api_key(request)
         assert exc_info.value.status_code == 401
@@ -337,7 +337,7 @@ class TestGetAvailableModels:
         """
         response = test_client.get(
             "/admin/api/models",
-            headers={"Authorization": f"Bearer {PROXY_API_KEY}"},
+            headers={"Authorization": f"Bearer {get_proxy_api_key()}"},
         )
         assert response.status_code == 200
 
@@ -348,7 +348,7 @@ class TestGetAvailableModels:
         """
         response = test_client.get(
             "/admin/api/models",
-            headers={"X-API-Key": PROXY_API_KEY},
+            headers={"X-API-Key": get_proxy_api_key()},
         )
         assert response.status_code == 200
 
@@ -378,7 +378,7 @@ class TestGetAvailableModels:
         """
         response = test_client.get(
             "/admin/api/models",
-            headers={"Authorization": f"Bearer {PROXY_API_KEY}"},
+            headers={"Authorization": f"Bearer {get_proxy_api_key()}"},
         )
         body = response.json()
         assert body["success"] is True
@@ -392,7 +392,7 @@ class TestGetAvailableModels:
         """
         response = test_client.get(
             "/admin/api/models",
-            headers={"Authorization": f"Bearer {PROXY_API_KEY}"},
+            headers={"Authorization": f"Bearer {get_proxy_api_key()}"},
         )
         data = response.json()["data"]
         assert data == sorted(data)
@@ -410,7 +410,7 @@ class TestGetAvailableModels:
 
         response = test_client.get(
             "/admin/api/models",
-            headers={"Authorization": f"Bearer {PROXY_API_KEY}"},
+            headers={"Authorization": f"Bearer {get_proxy_api_key()}"},
         )
         data = response.json()["data"]
 
@@ -432,7 +432,7 @@ class TestGetAvailableModels:
 
         response = test_client.get(
             "/admin/api/models",
-            headers={"Authorization": f"Bearer {PROXY_API_KEY}"},
+            headers={"Authorization": f"Bearer {get_proxy_api_key()}"},
         )
         data = response.json()["data"]
 
@@ -451,7 +451,7 @@ class TestGetAvailableModels:
 
         response = test_client.get(
             "/admin/api/models",
-            headers={"Authorization": f"Bearer {PROXY_API_KEY}"},
+            headers={"Authorization": f"Bearer {get_proxy_api_key()}"},
         )
         data = response.json()["data"]
 
@@ -467,7 +467,7 @@ class TestGetAvailableModels:
         """
         response = test_client.get(
             "/admin/api/models",
-            headers={"Authorization": f"Bearer {PROXY_API_KEY}"},
+            headers={"Authorization": f"Bearer {get_proxy_api_key()}"},
         )
         data = response.json()["data"]
         assert len(data) == len(set(data)), "Model list contains duplicates"
@@ -596,7 +596,7 @@ class TestGetAliases:
         """
         response = test_client.get(
             "/admin/api/aliases",
-            headers={"X-API-Key": PROXY_API_KEY},
+            headers={"X-API-Key": get_proxy_api_key()},
         )
         assert response.status_code == 200
 

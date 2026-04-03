@@ -18,7 +18,7 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
-from kiro.config import PROXY_API_KEY
+from kiro.config import PROXY_API_KEY, get_proxy_api_key
 from kiro.credential_manager import CredentialManager
 
 
@@ -45,7 +45,7 @@ def cred_test_client(test_client, tmp_path):
 
 def _auth_headers():
     """Return valid Authorization headers."""
-    return {"Authorization": f"Bearer {PROXY_API_KEY}"}
+    return {"Authorization": f"Bearer {get_proxy_api_key()}"}
 
 
 # =============================================================================

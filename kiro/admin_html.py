@@ -549,6 +549,15 @@ textarea.cred-json:focus {{
         </div>
         <p class="settings-hint">设置后，所有客户端（Claude Code、Cursor 等）连接网关时需使用此密钥进行认证。密钥会持久化保存在服务端。</p>
     </div>
+    <div class="card" style="margin-top:16px;">
+        <h2>响应缓存</h2>
+        <div id="cache-status"></div>
+        <div class="form-row" style="margin-top:12px;gap:8px;">
+            <button class="btn btn-primary" id="cache-toggle-btn" onclick="toggleCache()">加载中...</button>
+            <button class="btn btn-danger" onclick="clearCache()" style="padding:8px 16px;font-size:14px;">清除缓存</button>
+        </div>
+        <p class="settings-hint">启用后，相同的请求（模型、消息、参数完全一致）将返回缓存结果，减少 API 调用。仅对非流式请求生效。</p>
+    </div>
 </div>
 
 <!-- Toast Container -->
@@ -600,7 +609,47 @@ function renderApiKeyStatus(connected) {{
     }}
 }}
 
+function renderApiKeyInvalid() {{
+    const el = document.getElementById('apikey-status');
+    el.innerHTML =
+        '<span class="status-badge disconnected"><span class="status-dot"></span>密钥无效</span>' +
+        '<div class="settings-hint">当前浏览器保存的 API Key 与服务端不匹配，请输入正确的 API Key 后点击「验证并登录」</div>' +
+        '<div class="form-row" style="margin-top:12px;">' +
+            '<div class="form-group">' +
+                '<label for="current-apikey-input">输入当前有效的 API Key</label>' +
+                '<input type="password" id="current-apikey-input" placeholder="输入服务端当前生效的密钥" autocomplete="off">' +
+            '</div>' +
+            '<button class="btn btn-primary" onclick="loginWithKey()">验证并登录</button>' +
+        '</div>';
+}}
+
 /* ===== API Key Settings Actions ===== */
+async function loginWithKey() {{
+    const input = document.getElementById('current-apikey-input');
+    const key = input.value.trim();
+    if (!key) {{
+        showToast('请输入 API Key', 'error');
+        input.focus();
+        return;
+    }}
+    // Try to validate this key against the server
+    apiKey = key;
+    const result = await apiFetch('/admin/api/models');
+    if (result) {{
+        localStorage.setItem('admin_api_key', apiKey);
+        showToast('验证成功', 'success');
+        renderApiKeyStatus(true);
+        availableModels = result.data || [];
+        updateModelsUI();
+        await loadAliases();
+        await loadCredentials();
+        await loadCacheStats();
+    }} else {{
+        apiKey = '';
+        renderApiKeyInvalid();
+    }}
+}}
+
 async function saveApiKey() {{
     const input = document.getElementById('settings-apikey-input');
     const key = input.value.trim();
@@ -609,12 +658,23 @@ async function saveApiKey() {{
         input.focus();
         return;
     }}
-    // Call server to set the API key
+    // Check server-side status first to decide whether auth is needed
+    let serverConfigured = false;
+    try {{
+        const statusResp = await fetch('/admin/api/settings/apikey/status');
+        const statusData = await statusResp.json();
+        serverConfigured = statusData.data && statusData.data.configured;
+    }} catch (e) {{
+        console.error('Failed to check apikey status:', e);
+    }}
+
     const headers = {{
         'Content-Type': 'application/json',
     }};
-    // If we already have a key, send it for authorization
-    if (apiKey) {{
+    // Only send auth header when the server actually has a key configured
+    // This avoids the deadlock where localStorage has a stale key but
+    // the server reports "unconfigured" (using default key).
+    if (serverConfigured && apiKey) {{
         headers['Authorization'] = 'Bearer ' + apiKey;
     }}
     try {{
@@ -639,6 +699,53 @@ async function saveApiKey() {{
     }} catch (err) {{
         console.error('saveApiKey error:', err);
         showToast('网络连接失败', 'error');
+    }}
+}}
+
+/* ===== Cache Management ===== */
+async function loadCacheStats() {{
+    const statusEl = document.getElementById('cache-status');
+    const btnEl = document.getElementById('cache-toggle-btn');
+    const result = await apiFetch('/admin/api/cache/stats');
+    if (!result) {{
+        statusEl.innerHTML = '<span class="status-badge disconnected"><span class="status-dot"></span>无法加载</span>';
+        btnEl.textContent = '启用缓存';
+        return;
+    }}
+    const d = result.data;
+    const badge = d.enabled
+        ? '<span class="status-badge connected"><span class="status-dot"></span>已启用</span>'
+        : '<span class="status-badge disconnected"><span class="status-dot"></span>已禁用</span>';
+    const stats = d.enabled
+        ? '<div class="apikey-display">缓存条目: ' + d.size + '/' + d.max_size +
+          ' | 命中: ' + d.hits + ' | 未命中: ' + d.misses +
+          ' | 命中率: ' + (d.hit_rate * 100).toFixed(1) + '% | TTL: ' + d.ttl + 's</div>'
+        : '';
+    statusEl.innerHTML = badge + stats;
+    btnEl.textContent = d.enabled ? '禁用缓存' : '启用缓存';
+    btnEl.dataset.enabled = d.enabled ? 'true' : 'false';
+}}
+
+async function toggleCache() {{
+    const btnEl = document.getElementById('cache-toggle-btn');
+    const currentlyEnabled = btnEl.dataset.enabled === 'true';
+    const result = await apiFetch('/admin/api/cache/toggle', {{
+        method: 'PUT',
+        body: JSON.stringify({{ enabled: !currentlyEnabled }})
+    }});
+    if (result) {{
+        showToast(result.message, 'success');
+        await loadCacheStats();
+    }}
+}}
+
+async function clearCache() {{
+    const result = await apiFetch('/admin/api/cache', {{
+        method: 'DELETE'
+    }});
+    if (result) {{
+        showToast(result.message, 'success');
+        await loadCacheStats();
     }}
 }}
 
@@ -684,8 +791,10 @@ async function validateAndLoad() {{
         updateModelsUI();
         await loadAliases();
         await loadCredentials();
+        await loadCacheStats();
     }} else {{
-        renderApiKeyStatus(false);
+        // Key exists locally but server rejected it — show "invalid" instead of "unconfigured"
+        renderApiKeyInvalid();
     }}
 }}
 
@@ -1098,37 +1207,61 @@ function escapeHtml(str) {{
 /* ===== Init ===== */
 document.addEventListener('DOMContentLoaded', async function() {{
     // Check server-side API key status first
+    let serverConfigured = false;
     try {{
         const resp = await fetch('/admin/api/settings/apikey/status');
         const data = await resp.json();
-        const serverConfigured = data.data && data.data.configured;
-        
-        if (!serverConfigured && !apiKey) {{
-            // First-time setup: no key on server, no local key
-            renderApiKeyStatus(false);
-            switchTab('settings');
-            document.getElementById('alias-tbody').innerHTML =
-                '<tr><td colspan="3" class="empty-msg">请先在系统设置中设置 API Key</td></tr>';
-            document.getElementById('models-container').innerHTML =
-                '<span class="empty-msg">请先在系统设置中设置 API Key</span>';
-            document.getElementById('cred-list').innerHTML =
-                '<div class="empty-msg">请先在系统设置中设置 API Key</div>';
-            return;
-        }}
+        serverConfigured = data.data && data.data.configured;
     }} catch (err) {{
         console.error('Failed to check API key status:', err);
     }}
-    
+
+    if (!serverConfigured && !apiKey) {{
+        // First-time setup: no key on server, no local key
+        renderApiKeyStatus(false);
+        switchTab('settings');
+        document.getElementById('alias-tbody').innerHTML =
+            '<tr><td colspan="3" class="empty-msg">请先在系统设置中设置 API Key</td></tr>';
+        document.getElementById('models-container').innerHTML =
+            '<span class="empty-msg">请先在系统设置中设置 API Key</span>';
+        document.getElementById('cred-list').innerHTML =
+            '<div class="empty-msg">请先在系统设置中设置 API Key</div>';
+        return;
+    }}
+
+    if (!serverConfigured && apiKey) {{
+        // Server has no real key yet but localStorage has a stale one — clear it
+        // so the first-time setup flow works cleanly.
+        apiKey = '';
+        localStorage.removeItem('admin_api_key');
+        renderApiKeyStatus(false);
+        switchTab('settings');
+        document.getElementById('alias-tbody').innerHTML =
+            '<tr><td colspan="3" class="empty-msg">请先在系统设置中设置 API Key</td></tr>';
+        document.getElementById('models-container').innerHTML =
+            '<span class="empty-msg">请先在系统设置中设置 API Key</span>';
+        document.getElementById('cred-list').innerHTML =
+            '<div class="empty-msg">请先在系统设置中设置 API Key</div>';
+        return;
+    }}
+
     if (apiKey) {{
-        // Local key exists — validate and load data
+        // Local key exists and server is configured — validate
         await validateAndLoad().catch(function(err) {{
             console.error('Initial validateAndLoad failed:', err);
         }});
     }} else {{
-        // Server has a key but browser doesn't — prompt for key
-        renderApiKeyStatus(false);
+        // Server has a key but browser doesn't — prompt user to enter it
+        renderApiKeyInvalid();
         switchTab('settings');
     }}
+    
+    // Auto-refresh credential usage stats every 15 seconds
+    setInterval(function() {{
+        if (apiKey && document.getElementById('tab-credentials').classList.contains('active')) {{
+            loadCredentials();
+        }}
+    }}, 15000);
 }});
 </script>
 </body>

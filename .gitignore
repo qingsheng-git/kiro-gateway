@@ -42,3 +42,5 @@ htmlcov/
 # Temporary release files
 QUICK_RELEASE_INFO.txt
 RELEASE_TAG.txt
+.env11
+.gitignore

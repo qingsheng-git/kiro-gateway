@@ -88,11 +88,11 @@ def valid_proxy_api_key():
     """
     Returns the actual PROXY_API_KEY that the application is using.
     
-    This reads the value from kiro.config, which was loaded when the app
-    was imported. This ensures tests use the same key the app validates against.
+    This reads the effective value via get_proxy_api_key(), which accounts
+    for runtime overrides set via the admin panel.
     """
-    from kiro.config import PROXY_API_KEY
-    return PROXY_API_KEY
+    from kiro.config import get_proxy_api_key
+    return get_proxy_api_key()
 
 
 @pytest.fixture

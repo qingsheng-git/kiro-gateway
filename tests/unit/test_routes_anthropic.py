@@ -19,7 +19,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from kiro.routes_anthropic import verify_anthropic_api_key, router
-from kiro.config import PROXY_API_KEY
+from kiro.config import PROXY_API_KEY, get_proxy_api_key
 
 
 # =============================================================================
@@ -38,7 +38,7 @@ class TestVerifyAnthropicApiKey:
         print("Setup: Creating valid x-api-key...")
         
         print("Action: Calling verify_anthropic_api_key...")
-        result = await verify_anthropic_api_key(x_api_key=PROXY_API_KEY, authorization=None)
+        result = await verify_anthropic_api_key(x_api_key=get_proxy_api_key(), authorization=None)
         
         print(f"Comparing result: Expected True, Got {result}")
         assert result is True
@@ -50,7 +50,7 @@ class TestVerifyAnthropicApiKey:
         Purpose: Ensure OpenAI-style authentication also works.
         """
         print("Setup: Creating valid Bearer token...")
-        valid_auth = f"Bearer {PROXY_API_KEY}"
+        valid_auth = f"Bearer {get_proxy_api_key()}"
         
         print("Action: Calling verify_anthropic_api_key...")
         result = await verify_anthropic_api_key(x_api_key=None, authorization=valid_auth)
@@ -68,7 +68,7 @@ class TestVerifyAnthropicApiKey:
         
         print("Action: Calling verify_anthropic_api_key with both headers...")
         result = await verify_anthropic_api_key(
-            x_api_key=PROXY_API_KEY,
+            x_api_key=get_proxy_api_key(),
             authorization="Bearer wrong_key"
         )
         
