@@ -758,7 +758,7 @@ def print_startup_banner(host: str, port: int) -> None:
     print()
     print(f"  {DIM}{line * 48}{RESET}")
     print(f"  {WHITE}{chat_icon} Found a bug? Need help? Have questions?{RESET}")
-    print(f"  {YELLOW}{arrow}  https://github.com/jwadow/kiro-gateway/issues{RESET}")
+    print(f"  {YELLOW}{arrow}  https://github.com/qingsheng-git/kiro-gateway/issues{RESET}")
     print(f"  {DIM}{line * 48}{RESET}")
     print()
 

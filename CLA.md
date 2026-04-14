@@ -109,7 +109,7 @@ If you have questions about this CLA, please open an issue in the repository or 
 
 **Maintainer:** Jwadow
 **GitHub:** [@jwadow](https://github.com/jwadow)
-**Project:** [Kiro Gateway](https://github.com/jwadow/kiro-gateway)
+**Project:** [Kiro Gateway](https://github.com/qingsheng-git/kiro-gateway)
 
 ---
 

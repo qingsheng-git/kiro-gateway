@@ -80,7 +80,7 @@
 
 ```bash
 # リポジトリをクローン（Git が必要）
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 
 # または ZIP をダウンロード：Code → Download ZIP → 解凍 → kiro-gateway フォルダを開く
@@ -264,7 +264,7 @@ PROXY_API_KEY="my-super-secret-password-123"
 
 ```bash
 # 1. クローンと設定
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 cp .env.example .env
 # .env を認証情報で編集

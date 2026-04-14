@@ -99,7 +99,7 @@
 
 ```bash
 # 克隆仓库（需要 Git）
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 
 # 或下载 ZIP：Code → Download ZIP → 解压 → 打开 kiro-gateway 文件夹
@@ -423,7 +423,7 @@ PROXY_API_KEY="my-super-secret-password-123"
 
 ```bash
 # 1. 克隆并配置
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 cp .env.example .env
 # 使用您的凭据编辑 .env

@@ -99,7 +99,7 @@ This is a fork of [Jwadow/kiro-gateway](https://github.com/Jwadow/kiro-gateway) 
 
 ```bash
 # Clone the repository (requires Git)
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 
 # Or download ZIP: Code → Download ZIP → extract → open kiro-gateway folder
@@ -423,7 +423,7 @@ If you need to manually extract the refresh token (e.g., for debugging), you can
 
 ```bash
 # 1. Clone and configure
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 cp .env.example .env
 # Edit .env with your credentials

@@ -671,8 +671,8 @@ A: Disable "Start with Windows", exit the application, and delete the project di
 ## Support
 
 For issues, questions, or feature requests:
-- **GitHub Issues:** https://github.com/Jwadow/kiro-gateway/issues
-- **Documentation:** https://github.com/Jwadow/kiro-gateway/blob/main/README.md
+- **GitHub Issues:** https://github.com/qingsheng-git/kiro-gateway/issues
+- **Documentation:** https://github.com/qingsheng-git/kiro-gateway/blob/main/README.md
 
 ---
 

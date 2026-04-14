@@ -80,7 +80,7 @@ Dibuat dengan ❤️ oleh [@Jwadow](https://github.com/jwadow)
 
 ```bash
 # Clone repositori (memerlukan Git)
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 
 # Atau unduh ZIP: Code → Download ZIP → ekstrak → buka folder kiro-gateway
@@ -264,7 +264,7 @@ Jika Anda perlu mengekstrak refresh token secara manual (misalnya, untuk debuggi
 
 ```bash
 # 1. Clone dan konfigurasi
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 cp .env.example .env
 # Edit .env dengan kredensial Anda

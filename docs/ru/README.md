@@ -80,7 +80,7 @@
 
 ```bash
 # Клонируйте репозиторий (требуется Git)
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 
 # Или скачайте ZIP: Code → Download ZIP → распакуйте → откройте папку kiro-gateway
@@ -264,7 +264,7 @@ PROXY_API_KEY="my-super-secret-password-123"
 
 ```bash
 # 1. Клонируйте и настройте
-git clone https://github.com/Jwadow/kiro-gateway.git
+git clone https://github.com/qingsheng-git/kiro-gateway.git
 cd kiro-gateway
 cp .env.example .env
 # Отредактируйте .env с вашими учётными данными
