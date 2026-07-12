@@ -42,7 +42,8 @@ from loguru import logger
 from pydantic import BaseModel
 
 from kiro.admin_html import get_admin_html
-from kiro.config import APP_VERSION, HIDDEN_FROM_LIST, HIDDEN_MODELS, PROXY_API_KEY, get_proxy_api_key, set_runtime_proxy_api_key, is_api_key_configured
+from kiro.config import APP_VERSION, FALLBACK_MODELS, HIDDEN_FROM_LIST, HIDDEN_MODELS, PROXY_API_KEY, SSL_VERIFY, get_proxy_api_key, set_runtime_proxy_api_key, is_api_key_configured
+from kiro.model_loader import reload_model_cache
 
 
 # --- Pydantic Models ---
@@ -312,6 +313,60 @@ async def get_available_models(
     logger.debug(f"Admin API: returning {len(sorted_models)} available models")
 
     return ApiResponse(success=True, message="ok", data=sorted_models)
+
+
+@admin_router.post("/api/models/refresh", response_model=ApiResponse)
+async def refresh_models(
+    request: Request,
+    _auth: bool = Depends(verify_admin_api_key),
+) -> ApiResponse:
+    """Re-fetch the latest model list from Kiro based on configured credentials.
+
+    Rebuilds the in-memory model cache from the union of every configured
+    credential source (the primary ``.env`` credential and each enabled
+    credential profile in ``credentials.json``). This lets users pick up newly
+    released models without restarting the gateway.
+
+    On success, ``ModelResolver`` sees the refreshed cache immediately (it holds
+    a reference to the same cache object), so aliases and ``/v1/models`` reflect
+    the new list right away.
+
+    Args:
+        request: The incoming FastAPI request (used to access ``app.state``).
+        _auth: Injected by ``verify_admin_api_key`` dependency.
+
+    Returns:
+        ApiResponse where ``data`` contains the reload summary
+        (``total``, ``sources``, ``errors``, ``used_fallback``) and the fresh
+        list of model IDs under ``models``.
+    """
+    state = request.app.state
+    summary = await reload_model_cache(
+        model_cache=state.model_cache,
+        auth_manager=getattr(state, "auth_manager", None),
+        credential_manager=getattr(state, "credential_manager", None),
+        hidden_models=HIDDEN_MODELS,
+        fallback_models=FALLBACK_MODELS,
+        ssl_verify=SSL_VERIFY,
+        use_primary_auth=getattr(state, "has_env_credentials", False),
+    )
+
+    # Build the same filtered/sorted list the admin UI expects
+    models: set[str] = set(state.model_cache.get_all_model_ids())
+    models.update(HIDDEN_MODELS.keys())
+    models -= set(HIDDEN_FROM_LIST)
+    summary["models"] = sorted(models)
+
+    if summary["used_fallback"]:
+        message = "未能从任何凭证获取模型，已使用内置备用列表"
+    elif summary["errors"]:
+        message = f"已刷新 {summary['total']} 个模型（部分凭证失败：{'; '.join(summary['errors'])}）"
+    else:
+        message = f"已刷新 {summary['total']} 个模型（来自 {summary['sources']} 个凭证源）"
+
+    logger.info(f"Admin API: model list refreshed — {summary['total']} models, {summary['sources']} source(s)")
+    return ApiResponse(success=not summary["used_fallback"], message=message, data=summary)
+
 
 @admin_router.get("/api/aliases", response_model=ApiResponse)
 async def get_aliases(

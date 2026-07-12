@@ -79,6 +79,7 @@ from kiro.config import (
 from kiro.auth import KiroAuthManager
 from kiro.cache import ModelInfoCache
 from kiro.model_resolver import ModelResolver
+from kiro.model_loader import fetch_models_from_auth
 from kiro.settings_manager import SettingsManager
 from kiro.credential_manager import CredentialManager
 from kiro.routes_openai import router as openai_router
@@ -351,40 +352,20 @@ async def lifespan(app: FastAPI):
     # Create model cache
     app.state.model_cache = ModelInfoCache()
     
+    # Record whether env/.env credentials exist so the admin refresh endpoint
+    # (kiro.model_loader.reload_model_cache) can decide whether to use them.
+    app.state.has_env_credentials = has_env_credentials()
+
     # BLOCKING: Load models from Kiro API at startup
     # This ensures the cache is populated BEFORE accepting any requests.
     # No race conditions - requests only start after yield.
     # Skip API call if no credentials are configured (setup mode).
-    if has_env_credentials():
+    if app.state.has_env_credentials:
         logger.info("Loading models from Kiro API...")
         try:
-            token = await app.state.auth_manager.get_access_token()
-            from kiro.utils import get_kiro_headers
-            from kiro.auth import AuthType
-            headers = get_kiro_headers(app.state.auth_manager, token)
-            
-            # Build params - profileArn is only needed for Kiro Desktop auth
-            params = {"origin": "AI_EDITOR"}
-            if app.state.auth_manager.auth_type == AuthType.KIRO_DESKTOP and app.state.auth_manager.profile_arn:
-                params["profileArn"] = app.state.auth_manager.profile_arn
-            
-            list_models_url = f"{app.state.auth_manager.q_host}/ListAvailableModels"
-            logger.debug(f"Fetching models from: {list_models_url}")
-            
-            async with httpx.AsyncClient(timeout=30, verify=SSL_VERIFY) as client:
-                response = await client.get(
-                    list_models_url,
-                    headers=headers,
-                    params=params
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    models_list = data.get("models", [])
-                    await app.state.model_cache.update(models_list)
-                    logger.debug(f"Successfully loaded {len(models_list)} models from Kiro API")
-                else:
-                    raise Exception(f"HTTP {response.status_code}")
+            models_list = await fetch_models_from_auth(app.state.auth_manager, SSL_VERIFY)
+            await app.state.model_cache.update(models_list)
+            logger.debug(f"Successfully loaded {len(models_list)} models from Kiro API")
         except Exception as e:
             # FALLBACK: Use built-in model list
             logger.error(f"Failed to fetch models from Kiro API: {e}")
@@ -447,35 +428,13 @@ async def lifespan(app: FastAPI):
         # This ensures the model list reflects the union of all credentials' permissions
         for profile in credential_manager.enabled_profiles:
             try:
-                token = await profile.auth_manager.get_access_token()
-                from kiro.utils import get_kiro_headers
-                from kiro.auth import AuthType
-                headers = get_kiro_headers(profile.auth_manager, token)
-                
-                params = {"origin": "AI_EDITOR"}
-                if profile.auth_manager.auth_type == AuthType.KIRO_DESKTOP and profile.auth_manager.profile_arn:
-                    params["profileArn"] = profile.auth_manager.profile_arn
-                
-                list_models_url = f"{profile.auth_manager.q_host}/ListAvailableModels"
-                
-                async with httpx.AsyncClient(timeout=30, verify=SSL_VERIFY) as client:
-                    response = await client.get(
-                        list_models_url,
-                        headers=headers,
-                        params=params
-                    )
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        models_list = data.get("models", [])
-                        # Merge into existing cache (additive — union of all profiles)
-                        for model in models_list:
-                            model_id = model.get("modelId")
-                            if model_id and not app.state.model_cache.get(model_id):
-                                app.state.model_cache._cache[model_id] = model
-                        logger.info(f"Merged {len(models_list)} models from credential '{profile.name}'")
-                    else:
-                        logger.warning(f"Failed to fetch models for credential '{profile.name}': HTTP {response.status_code}")
+                models_list = await fetch_models_from_auth(profile.auth_manager, SSL_VERIFY)
+                # Merge into existing cache (additive — union of all profiles)
+                for model in models_list:
+                    model_id = model.get("modelId")
+                    if model_id and not app.state.model_cache.get(model_id):
+                        app.state.model_cache._cache[model_id] = model
+                logger.info(f"Merged {len(models_list)} models from credential '{profile.name}'")
             except Exception as e:
                 logger.warning(f"Failed to fetch models for credential '{profile.name}': {e}")
     else:

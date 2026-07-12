@@ -1041,8 +1041,11 @@ textarea.cred-json:focus {{
 
     <!-- Available Models -->
     <div class="card">
-        <h2>可用模型</h2>
-        <div id="models-container" class="models-grid">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h2 style="border:none;margin:0;padding:0;">可用模型 <span id="models-count" style="font-size:13px;color:#64748b;font-weight:400;"></span></h2>
+            <button class="btn-sm btn-outline" id="refresh-models-btn" onclick="refreshModels()">刷新模型列表</button>
+        </div>
+        <div id="models-container" class="models-grid" style="margin-top:16px;">
             <span class="empty-msg">加载中...</span>
         </div>
     </div>
@@ -1496,6 +1499,10 @@ async function loadModels() {{
 function updateModelsUI() {{
     const container = document.getElementById('models-container');
     const datalist = document.getElementById('model-list');
+    const countEl = document.getElementById('models-count');
+    if (countEl) {{
+        countEl.textContent = availableModels.length ? '(' + availableModels.length + ')' : '';
+    }}
     datalist.innerHTML = availableModels.map(m =>
         '<option value="' + escapeHtml(m) + '">'
     ).join('');
@@ -1506,6 +1513,22 @@ function updateModelsUI() {{
     container.innerHTML = availableModels.map(m =>
         '<span class="model-tag">' + escapeHtml(m) + '</span>'
     ).join('');
+}}
+
+/* ===== Refresh Models (fetch latest list from configured credentials) ===== */
+async function refreshModels() {{
+    const btn = document.getElementById('refresh-models-btn');
+    const original = btn ? btn.textContent : '';
+    if (btn) {{ btn.disabled = true; btn.textContent = '刷新中...'; }}
+    try {{
+        const result = await apiFetch('/admin/api/models/refresh', {{ method: 'POST' }});
+        if (!result) return;  // apiFetch already showed an error toast
+        availableModels = (result.data && result.data.models) || [];
+        updateModelsUI();
+        showToast(result.message || '模型列表已刷新', result.success ? 'success' : 'warning');
+    }} finally {{
+        if (btn) {{ btn.disabled = false; btn.textContent = original; }}
+    }}
 }}
 
 /* ===== Add Alias ===== */
